@@ -117,7 +117,7 @@ jobs:
 
             for (const addon of addons) {
               const xml = fs.readFileSync(path.join(addon, 'addon.xml'), 'utf8');
-              const m = xml.match(/version\s*=\s*"([^"]+)"/);
+              const m = xml.match(/<addon[^>]*\bversion\s*=\s*"([^"]+)"/);
               if (!m) { core.warning(`no version in ${addon}/addon.xml`); continue; }
               const version = m[1];
               const tag = `${addon}-v${version}`;
