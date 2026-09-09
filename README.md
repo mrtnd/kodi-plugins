@@ -7,7 +7,7 @@ Current plugins:
 
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
-| FMovies | `plugin.video.fmovies` | `1.2.2` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
+| FMovies | `plugin.video.fmovies` | `1.2.3` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -16,7 +16,7 @@ Current plugins:
 ## 1. Install (end users)
 
 1. Go to the [**Releases page**](https://github.com/mrtnd/kodi-plugins/releases),
-   download the zip you need, e.g. `plugin.video.fmovies-1.2.2.zip`.
+    download the zip you need, e.g. `plugin.video.fmovies-1.2.3.zip`.
 2. Copy the zip to your TV (USB, `Send Files to TV` app, or cloud drive).
 3. In Kodi: **Settings → System → Add-ons → Unknown sources → ON**.
 4. **Add-ons → 📦 (top-left) → Install from zip file** → select the zip.
