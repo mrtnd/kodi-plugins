@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.fmovies" name="FMovies" version="1.2.1" provider-name="Community">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+        <import addon="script.module.beautifulsoup4" version="4.9.3"/>
+        <import addon="script.module.inputstreamhelper" version="0.5.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">FMovies Streaming Add-on for Kodi</summary>
+        <description lang="en_GB">Watch high quality movies and TV series directly from FMovies with clean stream resolution and no ads.</description>
+        <disclaimer lang="en_GB">This add-on does not store or host any content. All content is scraped from publicly available web sources.</disclaimer>
+        <platform>all</platform>
+        <license>MIT</license>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

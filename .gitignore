@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Pytest / testing / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+test-results/
+
+# Kodi build artifacts - built by CI, never commit
+*.zip
+*.sha256
+artifacts/
+release/
+
+# Kodi runtime / local user data (may contain tokens, history)
+*.kodi/
+userdata/
+*.log
+
+# Secrets & local config
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+local_settings.xml
+settings.local.xml
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temp / large local docs not needed in repo
+*.tmp
+*.bak
+
+# Legacy local-only artifacts in the working folder (pre-CI manual builds/notes).
+# Root-anchored so plugin assets like plugin.video.fmovies/icon.png still commit.
+/plugin.video.fmovies*.zip
+/*.png
+/*.jpeg
+/*.jpg
+/Android TV Native Streaming App Concept.md
+/HOWTO.md
+/PROMPT.md

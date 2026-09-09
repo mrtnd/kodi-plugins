@@ -1,0 +1,171 @@
+name: Build and Release Kodi Add-ons
+
+# Every push to main builds + tests. A GitHub Release is created
+# automatically ONLY when addon.xml version was bumped
+# (i.e. tag <addon-id>-v<version> does not exist yet).
+# Commits without a version bump just run CI, no duplicate release.
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["plugin.*-v*", "v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest requests beautifulsoup4
+
+      - name: Validate addon.xml files
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET, sys
+          files = glob.glob('plugin.*/addon.xml')
+          if not files:
+              print('No plugin.*/addon.xml found'); sys.exit(1)
+          for f in files:
+              root = ET.parse(f).getroot()
+              print(f"{f}: id={root.get('id')} version={root.get('version')}")
+              assert root.get('id') and root.get('version'), f'missing id/version in {f}'
+          EOF
+
+      - name: Run pytest (all addons)
+        run: |
+          for d in plugin.*/; do
+            if [ -d "$d/tests" ]; then
+              echo "== pytest $d =="
+              python -m pytest "$d/tests" -v
+            fi
+          done
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Discover addons
+        id: discover
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import glob, json, os
+          addons = sorted(d.rstrip('/') for d in glob.glob('plugin.*/') if os.path.exists(os.path.join(d, 'addon.xml')))
+          print(f"matrix={json.dumps(addons)}")
+          EOF
+          echo "addons: ${{ steps.discover.outputs.matrix }}"
+
+      - name: Build zip(s) with repo script
+        run: |
+          python3 scripts/build_zip.py --out dist
+          ls -lh dist/
+          sha256sum dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-addons
+          path: dist/*
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kodi-addons
+          path: dist
+
+      - name: Create per-addon releases for bumped versions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
+
+            const addons = fs.readdirSync('.', { withFileTypes: true })
+              .filter(d => d.isDirectory() && d.name.startsWith('plugin.'))
+              .map(d => d.name)
+              .filter(n => fs.existsSync(path.join(n, 'addon.xml')));
+            if (!addons.length) { core.setFailed('no addons found'); return; }
+
+            for (const addon of addons) {
+              const xml = fs.readFileSync(path.join(addon, 'addon.xml'), 'utf8');
+              const m = xml.match(/version\s*=\s*"([^"]+)"/);
+              if (!m) { core.warning(`no version in ${addon}/addon.xml`); continue; }
+              const version = m[1];
+              const tag = `${addon}-v${version}`;
+              const zip = path.join('dist', `${addon}-${version}.zip`);
+              if (!fs.existsSync(zip)) { core.warning(`missing ${zip}`); continue; }
+
+              // Skip if release/tag already exists -> commit had no version bump
+              try {
+                execSync(`git rev-parse --verify refs/tags/${tag}`, { stdio: 'ignore' });
+                console.log(`skip ${tag}: tag already exists`);
+                continue;
+              } catch {}
+              try {
+                await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                console.log(`skip ${tag}: release already exists`);
+                continue;
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+
+              console.log(`creating release ${tag}`);
+              await github.rest.git.createRef({
+                owner, repo, ref: `refs/tags/${tag}`,
+                sha: context.sha,
+              });
+              await github.rest.repos.createRelease({
+                owner, repo,
+                tag_name: tag,
+                name: tag,
+                generate_release_notes: true,
+                body: `Kodi add-on **${addon}** version **${version}**.\n\nInstall: Kodi → Add-ons → Install from zip → \`${addon}-${version}.zip\``,
+              });
+            }
+
+      - name: Upload zips to releases
+        run: |
+          for f in dist/plugin.*-*.zip; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f" .zip)            # e.g. plugin.video.fmovies-1.2.1
+            version="${base##*-}"
+            addon="${base%-*}"
+            tag="$addon-v$version"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "== uploading $f to $tag =="
+              gh release upload "$tag" "$f" "$f.sha256" --clobber
+            else
+              echo "skip $f (no release $tag)"
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

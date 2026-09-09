@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="2">
+    <category id="general" label="30000">
+        <setting id="base_url" type="string" label="30001" default="https://fmoviess.org"/>
+        <setting id="default_quality" type="select" label="30002" default="Auto" values="Auto|1080p|720p|480p"/>
+        <setting id="preferred_server" type="select" label="30003" default="Server 2" values="Server 1|Server 2|Server 3"/>
+        <setting id="use_inputstream" type="boolean" label="30004" default="true"/>
+    </category>
+    <category id="history" label="30010">
+        <setting id="search_history" type="string" label="30011" default="" visible="false"/>
+    </category>
+</settings>
