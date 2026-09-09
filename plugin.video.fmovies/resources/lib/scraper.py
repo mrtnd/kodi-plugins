@@ -1,129 +1,102 @@
 import re
-from urllib.parse import urljoin, quote
-import requests
-from bs4 import BeautifulSoup
+from urllib.parse import urlencode, urljoin
+
+import requests  # kept: tests patch resources.lib.scraper.requests.Session.get
+from resources.lib.http import (
+    HTML_HEADERS, decode_html, fetch_soup, make_session, normalize_base_url,
+)
 from resources.lib.kodi_utils import get_setting
 
-DEFAULT_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-}
+# Re-exported for back-compat (tests import decode_html from scraper).
+__all__ = ['FMoviesScraper', 'decode_html']
 
+CARD_SELECTORS = '.card.bg-transparent.border-0.h-100, div.col .card'
+CARD_FALLBACK = 'div.col, .card'
 
-def decode_html(response):
-    """Decode response bytes as UTF-8.
-
-    requests falls back to ISO-8859-1 for text/html without an explicit
-    charset, which mangles names like 'Chloé' into 'ChloÃ©'.
-    """
-    content = getattr(response, 'content', None)
-    if isinstance(content, (bytes, bytearray)):
-        try:
-            content_type = response.headers.get('content-type', '') or ''
-        except Exception:
-            content_type = ''
-        if not isinstance(content_type, str):
-            content_type = ''
-        if 'charset' not in content_type.lower():
-            try:
-                return bytes(content).decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-    text = getattr(response, 'text', '')
-    return text if isinstance(text, str) else ''
+SEARCH_THUMB = 'https://img.cdno.my.id/thumb/w_200/h_300/{}.jpg'
 
 
 class FMoviesScraper:
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(DEFAULT_HEADERS)
-        self.base_url = get_setting('base_url').rstrip('/') or 'https://fmoviess.org'
+        self.session = make_session(HTML_HEADERS)
+        self.base_url = normalize_base_url(get_setting('base_url'))
 
     def _get_soup(self, url):
-        response = self.session.get(url, timeout=12)
-        response.raise_for_status()
-        return BeautifulSoup(decode_html(response), 'html.parser')
+        return fetch_soup(self.session, url)
 
+    # -- catalog ------------------------------------------------------
     def get_catalog(self, path_or_url):
-        url = path_or_url if path_or_url.startswith('http') else urljoin(self.base_url, path_or_url)
+        url = (path_or_url if path_or_url.startswith('http')
+               else urljoin(self.base_url, path_or_url))
         soup = self._get_soup(url)
-        items = []
+        cards = soup.select(CARD_SELECTORS) or soup.select(CARD_FALLBACK)
+        items = [item for card in cards
+                 if (item := self._parse_card(card)) is not None]
+        return items, self._parse_next_page(soup)
 
-        # Correct selectors for fmoviess.org cards
-        cards = soup.select('.card.bg-transparent.border-0.h-100, div.col .card')
-        if not cards:
-            cards = soup.select('div.col, .card')
+    def _parse_card(self, card):
+        title_el = card.select_one('.card-title, h2, h3, .film-name')
+        link_el = card.select_one('a[href*="/film/"], a[href*="/tv/"], a.rounded')
+        if not link_el:
+            link_el = card.select_one('a')
+        if not link_el or not link_el.get('href'):
+            return None
+        link = link_el.get('href')
+        title = self._card_title(card, title_el, link_el)
+        thumb = self._card_thumb(card)
+        quality_el = card.select_one('.mlbq, .badge, .quality')
+        quality = quality_el.get_text(strip=True) if quality_el else ''
+        media_type = 'tvshow' if self._is_tv_link(link) else 'movie'
+        display_title = f"{title} [{quality}]" if quality else title
+        return {
+            'title': display_title,
+            'raw_title': title,
+            'url': urljoin(self.base_url, link),
+            'thumb': thumb,
+            'quality': quality,
+            'mediatype': media_type,
+        }
 
-        for card in cards:
-            title_el = card.select_one('.card-title, h2, h3, .film-name')
-            link_el = card.select_one('a[href*="/film/"], a[href*="/tv/"], a.rounded')
-            
-            if not link_el:
-                # Try finding any anchor inside card
-                link_el = card.select_one('a')
-            
-            if not link_el or not link_el.get('href'):
-                continue
+    @staticmethod
+    def _card_title(card, title_el, link_el):
+        if title_el and title_el.get_text(strip=True):
+            return title_el.get_text(strip=True)
+        img = card.select_one('img')
+        if img and img.get('alt'):
+            return img.get('alt')
+        return link_el.get('title', 'Unknown Title')
 
-            link = link_el.get('href')
-            full_link = urljoin(self.base_url, link)
+    def _card_thumb(self, card):
+        img_el = card.select_one('img.lazy, img')
+        if not img_el:
+            return ''
+        thumb = img_el.get('data-src') or img_el.get('src') or ''
+        if thumb and not thumb.startswith(('http', 'data:')):
+            thumb = urljoin(self.base_url, thumb)
+        return thumb
 
-            # Title fallback to img alt or title attribute
-            title = ''
-            if title_el:
-                title = title_el.get_text(strip=True)
-            if not title:
-                img_check = card.select_one('img')
-                if img_check:
-                    title = img_check.get('alt', '')
-            if not title:
-                title = link_el.get('title', 'Unknown Title')
+    @staticmethod
+    def _is_tv_link(link):
+        # NOTE: film URLs are /film/... for both movies and series, so
+        # series slugs carrying '-season-<n>-<id>' must also count as tv.
+        return ('/tv/' in link or 'tv-series' in link or '/tv-show/' in link
+                or re.search(r'-season-\d+-\d+/?$', link) is not None)
 
-            # Extract thumbnail image
-            img_el = card.select_one('img.lazy, img')
-            thumb = ''
-            if img_el:
-                thumb = img_el.get('data-src') or img_el.get('src') or ''
-                if thumb and not thumb.startswith('http') and not thumb.startswith('data:'):
-                    thumb = urljoin(self.base_url, thumb)
-
-            # Quality badge (HD, CAM, TS, mlbq)
-            quality_el = card.select_one('.mlbq, .badge, .quality')
-            quality = quality_el.get_text(strip=True) if quality_el else ''
-
-            # Media type (movie vs tvshow). NOTE: film URLs are /film/...
-            # for both movies and series, so series slugs carrying
-            # '-season-<n>-<id>' must also count as tv shows.
-            is_tv = ('/tv/' in link or 'tv-series' in link or '/tv-show/' in link
-                     or re.search(r'-season-\d+-\d+/?$', link) is not None)
-            media_type = 'tvshow' if is_tv else 'movie'
-
-            display_title = f"{title} [{quality}]" if quality else title
-
-            items.append({
-                'title': display_title,
-                'raw_title': title,
-                'url': full_link,
-                'thumb': thumb,
-                'quality': quality,
-                'mediatype': media_type
-            })
-
-        # Pagination
-        next_page_url = None
+    def _parse_next_page(self, soup):
         pagination = soup.select_one('.pagination, .page-item')
-        if pagination:
-            next_el = pagination.select_one('a[rel="next"], a.page-link[aria-label="Next"], .page-item.active + .page-item a')
-            if next_el and next_el.get('href'):
-                next_page_url = urljoin(self.base_url, next_el['href'])
+        if not pagination:
+            return None
+        next_el = pagination.select_one(
+            'a[rel="next"], a.page-link[aria-label="Next"], '
+            '.page-item.active + .page-item a')
+        if next_el and next_el.get('href'):
+            return urljoin(self.base_url, next_el['href'])
+        return None
 
-        return items, next_page_url
-
+    # -- search -------------------------------------------------------
     def search(self, query, limit=40):
         """Search via the site's own /searching JSON API (what the site's
         autocomplete uses). Returns (items, next_offset or None)."""
-        from urllib.parse import urlencode
         items = []
         offset = 0
         total = None
@@ -137,26 +110,7 @@ class FMoviesScraper:
             meta = payload.get('meta') or {}
             if total is None:
                 total = meta.get('total_items', len(data))
-            for entry in data:
-                title = entry.get('t', 'Unknown Title')
-                slug = entry.get('s', '')
-                quality = entry.get('q', '')
-                year = entry.get('y', '')
-                media_type = 'tvshow' if entry.get('d') == 's' else 'movie'
-                display = title
-                if quality:
-                    display = '{} [{}]'.format(display, quality)
-                if year:
-                    display = '{} ({})'.format(display, year)
-                items.append({
-                    'title': display,
-                    'raw_title': title,
-                    'url': urljoin(self.base_url, '/film/{}/'.format(slug)),
-                    'thumb': 'https://img.cdno.my.id/thumb/w_200/h_300/{}.jpg'.format(slug),
-                    'quality': quality,
-                    'year': year,
-                    'mediatype': media_type,
-                })
+            items.extend(self._parse_search_entry(e) for e in data)
             offset += len(data)
             if not data or (total is not None and offset >= total):
                 break
@@ -165,30 +119,48 @@ class FMoviesScraper:
         next_offset = offset if (total is not None and offset < total) else None
         return items, next_offset
 
+    def _parse_search_entry(self, entry):
+        title = entry.get('t', 'Unknown Title')
+        slug = entry.get('s', '')
+        quality = entry.get('q', '')
+        year = entry.get('y', '')
+        media_type = 'tvshow' if entry.get('d') == 's' else 'movie'
+        display = title
+        if quality:
+            display = '{} [{}]'.format(display, quality)
+        if year:
+            display = '{} ({})'.format(display, year)
+        return {
+            'title': display,
+            'raw_title': title,
+            'url': urljoin(self.base_url, '/film/{}/'.format(slug)),
+            'thumb': SEARCH_THUMB.format(slug),
+            'quality': quality,
+            'year': year,
+            'mediatype': media_type,
+        }
+
+    # -- genres / countries -------------------------------------------
     def get_dropdown_items(self, category_type):
         """Scrapes Genres or Countries list from the site menu"""
         soup = self._get_soup(self.base_url)
-        items = []
-        
-        selector = f"a[href*='/{category_type}/']"
-        for link in soup.select(selector):
-            title = link.get_text(strip=True)
-            href = link.get('href', '')
-            if title and href:
-                items.append({
-                    'title': title,
-                    'url': urljoin(self.base_url, href)
-                })
-        
         seen = set()
         unique_items = []
-        for item in items:
-            if item['title'].lower() not in seen:
-                seen.add(item['title'].lower())
-                unique_items.append(item)
-                
+        for link in soup.select(f"a[href*='/{category_type}/']"):
+            title = link.get_text(strip=True)
+            href = link.get('href', '')
+            if not (title and href):
+                continue
+            if title.lower() in seen:
+                continue
+            seen.add(title.lower())
+            unique_items.append({
+                'title': title,
+                'url': urljoin(self.base_url, href),
+            })
         return unique_items
 
+    # -- film page meta -------------------------------------------------
     @staticmethod
     def _info_row(soup, label):
         """Value cell of a '<p><strong>Label:</strong> ...</p>' info row.
@@ -286,10 +258,8 @@ class FMoviesScraper:
 
         # The site lists episodes inline on the film page (.episode buttons);
         # there are no separate season pages, so seasons stay empty.
-        seasons = []
-
         details = {
-            'seasons': seasons,
+            'seasons': [],
             'episodes': self._parse_episodes(soup),
             'mode': mode,
             'mid': mid,
