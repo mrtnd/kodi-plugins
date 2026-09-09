@@ -13,7 +13,7 @@ from resources.lib.scraper import FMoviesScraper
 from resources.lib.resolver import StreamResolver
 
 META_CACHE_FILE = 'film_meta.json'
-META_CACHE_TTL = 7 * 24 * 3600
+META_CACHE_TTL = 24 * 3600
 META_CACHE_MAX = 500
 
 
@@ -48,7 +48,7 @@ def _save_meta_cache(cache, path):
 def enrich_items(items):
     """Fill catalog items with film-page metadata (plot, genre, cast, ...).
 
-    Served from a 7-day profile cache; misses are fetched concurrently so
+    Served from a 24-hour profile cache; misses are fetched concurrently so
     a full catalog page resolves in a few seconds on first visit.
     """
     import time
@@ -95,23 +95,23 @@ def enrich_items(items):
     return items
 
 def main_menu():
-    add_dir_item("🔍 Search", {'action': 'search_menu'})
-    add_dir_item("🔥 Home Suggestions", {'action': 'catalog', 'url': '/home'})
-    add_dir_item("🎬 Movies", {'action': 'catalog', 'url': '/movies'})
-    add_dir_item("📺 TV-Series", {'action': 'catalog', 'url': '/tv-series'})
-    add_dir_item("⭐ Top IMDb", {'action': 'catalog', 'url': '/top-imdb'})
-    add_dir_item("🎭 Genres", {'action': 'dropdown_menu', 'type': 'genre'})
-    add_dir_item("🌐 Countries", {'action': 'dropdown_menu', 'type': 'country'})
+    add_dir_item("Search", {'action': 'search_menu'})
+    add_dir_item("Home Suggestions", {'action': 'catalog', 'url': '/home'})
+    add_dir_item("Movies", {'action': 'catalog', 'url': '/movies'})
+    add_dir_item("TV-Series", {'action': 'catalog', 'url': '/tv-series'})
+    add_dir_item("Top IMDb", {'action': 'catalog', 'url': '/top-imdb'})
+    add_dir_item("Genres", {'action': 'dropdown_menu', 'type': 'genre'})
+    add_dir_item("Countries", {'action': 'dropdown_menu', 'type': 'country'})
     end_directory("FMovies Main Menu")
 
 def search_menu():
-    add_dir_item("➕ New Search", {'action': 'new_search'})
+    add_dir_item("New Search", {'action': 'new_search'})
     history = get_search_history()
     if history:
         for q in history:
-            add_dir_item(f"🕒 {q}", {'action': 'search', 'query': q},
-                         context_menu=[("Remove from History", f"RunPlugin({sys.argv[0]}?action=clear_history)")])
-        add_dir_item("❌ Clear Search History", {'action': 'clear_history'})
+            add_dir_item(q, {'action': 'search', 'query': q},
+                          context_menu=[("Remove from History", f"RunPlugin({sys.argv[0]}?action=clear_history)")])
+        add_dir_item("Clear Search History", {'action': 'clear_history'})
     end_directory("Search")
 
 def new_search():
@@ -223,7 +223,7 @@ def show_items(items, next_item=None, category="Catalog"):
         )
 
     if next_item:
-        add_dir_item("▶ Next Page", {'action': 'catalog', 'url': next_item})
+        add_dir_item("Next Page >>", {'action': 'catalog', 'url': next_item})
 
     end_directory(category)
 
