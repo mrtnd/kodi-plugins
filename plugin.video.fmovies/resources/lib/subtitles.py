@@ -116,6 +116,8 @@ class OpenSubtitles:
 
     def download_best(self, candidates, dest_dir: str, tag: str) -> list:
         """Download the most-downloaded candidate sub to dest_dir."""
+        import io as _io
+        import re as _re
         import xmlrpc.client
         if not candidates or not dest_dir:
             return []
@@ -126,16 +128,26 @@ class OpenSubtitles:
                 'https://api.opensubtitles.org/xml-rpc', allow_none=True)
             res = server.DownloadSubtitles(self.login(), [best['IDSubtitleFile']])
             blob = (res.get('data') or [{}])[0].get('data')
-            if not blob:
+            if not blob or len(blob) > 256 * 1024:
                 return []
-            raw = gzip.decompress(_b64.b64decode(blob))
+            deflated = _b64.b64decode(blob)
+            if len(deflated) > 256 * 1024:
+                return []
+            with gzip.GzipFile(fileobj=_io.BytesIO(deflated), mode='rb') as _gz:
+                raw = _gz.read(1024 * 1024 + 1)
+            if not raw or len(raw) > 1024 * 1024:
+                return []
         except Exception:
             return []
         try:
             os.makedirs(dest_dir, exist_ok=True)
         except Exception:
             return []
-        path = os.path.join(dest_dir, 'os_{}_{}.srt'.format(tag, best['IDSubtitleFile']))
+        safe_tag = _re.sub(r'[^A-Za-z0-9_-]', '_', str(tag))[:64]
+        safe_id = _re.sub(r'[^A-Za-z0-9_-]', '_', str(best['IDSubtitleFile']))[:64]
+        path = os.path.join(dest_dir, 'os_{}_{}.srt'.format(safe_tag, safe_id))
+        if os.path.normpath(path) != os.path.join(dest_dir, os.path.basename(path)):
+            return []
         try:
             with open(path, 'wb') as fh:
                 fh.write(raw)

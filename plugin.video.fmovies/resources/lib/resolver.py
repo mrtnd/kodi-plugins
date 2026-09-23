@@ -192,6 +192,11 @@ class StreamResolver:
 
     # -- stage 4: vidnest -> m3u8 -----------------------------------------
     def _vidnest_candidates(self, kind, vid, season=None, episode=None):
+        try:
+            probe = _vidnest.build_url(VIDNEST_SERVERS[0][0], kind, vid, season, episode)
+        except ValueError as exc:
+            raise ResolveError('invalid season/episode: {}'.format(exc))
+        del probe
         for name, _type in VIDNEST_SERVERS:
             url = _vidnest.build_url(name, kind, vid, season, episode)
             try:
@@ -339,9 +344,23 @@ class StreamResolver:
         else:
             raise ResolveError(' // '.join(errors))
         kodi_headers = dict(GENERIC_HEADERS)
-        kodi_headers.update(headers or {})
+        # Per-stream headers win, but only from a narrow allowlist: several
+        # hosts enforce their own Referer. Arbitrary payload header names and
+        # raw values must never reach requests or the Kodi pipe suffix.
+        allowed = {}
+        for key in ('Referer', 'User-Agent', 'Origin'):
+            value = (headers or {}).get(key)
+            if not isinstance(value, str) or not value or len(value) >= 2048:
+                continue
+            clean = re.sub(r'[\r\n|&]', '', value).strip()
+            if not clean:
+                continue
+            if key in ('Referer', 'Origin') and not clean.startswith(('https://', 'http://')):
+                continue
+            allowed[key] = clean
+        kodi_headers.update(allowed)
         # Per-stream headers win: several hosts enforce their own Referer.
-        referer = (headers or {}).get('Referer') or NETODA_BASE + '/'
+        referer = allowed.get('Referer') or NETODA_BASE + '/'
         suffix = 'Referer={}&User-Agent={}'.format(
             referer, kodi_headers.get('User-Agent', GENERIC_HEADERS['User-Agent']))
         resolved = ResolvedURL('{}|{}'.format(url, suffix))

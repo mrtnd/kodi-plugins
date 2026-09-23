@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -72,7 +72,11 @@ jobs:
           addons = sorted(d.rstrip('/') for d in glob.glob('plugin.*/') if os.path.exists(os.path.join(d, 'addon.xml')))
           print(f"matrix={json.dumps(addons)}")
           EOF
-          echo "addons: ${{ steps.discover.outputs.matrix }}"
+      - name: Show discovered addons
+        run: |
+          echo "addons: $MATRIX"
+        env:
+          MATRIX: ${{ steps.discover.outputs.matrix }}
 
       - name: Build zip(s) with repo script
         run: |
@@ -90,6 +94,8 @@ jobs:
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,6 +108,7 @@ jobs:
           path: dist
 
       - name: Create per-addon releases for bumped versions
+        id: create
         uses: actions/github-script@v7
         with:
           script: |
@@ -116,6 +123,7 @@ jobs:
               .filter(n => fs.existsSync(path.join(n, 'addon.xml')));
             if (!addons.length) { core.setFailed('no addons found'); return; }
 
+            const created = [];
             for (const addon of addons) {
               const xml = fs.readFileSync(path.join(addon, 'addon.xml'), 'utf8');
               const m = xml.match(/<addon[^>]*\bversion\s*=\s*"([^"]+)"/);
@@ -151,22 +159,31 @@ jobs:
                 generate_release_notes: true,
                 body: `Kodi add-on **${addon}** version **${version}**.\n\nInstall: Kodi → Add-ons → Install from zip → \`${addon}-${version}.zip\``,
               });
+              created.push(tag);
             }
+            core.setOutput('created_tags', created.join('\n'));
 
       - name: Upload zips to releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CREATED_TAGS: ${{ steps.create.outputs.created_tags }}
         run: |
+          # Immutable releases: only upload zips for tags created in THIS run.
+          # Never overwrite a pre-existing release asset.
+          if [ -z "$CREATED_TAGS" ]; then
+            echo "no releases created in this run; nothing to upload"
+            exit 0
+          fi
           for f in dist/plugin.*-*.zip; do
             [ -e "$f" ] || continue
             base=$(basename "$f" .zip)            # e.g. plugin.video.fmovies-1.2.1
             version="${base##*-}"
             addon="${base%-*}"
             tag="$addon-v$version"
-            if gh release view "$tag" >/dev/null 2>&1; then
+            if printf '%s\n' "$CREATED_TAGS" | grep -qx "$tag"; then
               echo "== uploading $f to $tag =="
-              gh release upload "$tag" "$f" "$f.sha256" --clobber
+              gh release upload "$tag" "$f" "$f.sha256"
             else
-              echo "skip $f (no release $tag)"
+              echo "skip $f (tag $tag not created in this run)"
             fi
           done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

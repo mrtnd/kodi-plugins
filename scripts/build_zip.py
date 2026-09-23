@@ -30,8 +30,11 @@ EXCLUDE_DIRS = {
     ".git", ".github", ".idea", ".vscode",
     "tests", "test", ".coverage",
 }
-EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".log", ".tmp", ".bak"}
-EXCLUDE_NAMES = {".DS_Store", "Thumbs.db"}
+EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".log", ".tmp", ".bak", ".key", ".pem"}
+EXCLUDE_NAMES = {
+    ".DS_Store", "Thumbs.db",
+    ".env", "secrets.json", "local_settings.xml", "settings.local.xml",
+}
 
 
 def find_addons(specific: str | None) -> list[pathlib.Path]:
@@ -65,6 +68,8 @@ def should_include(path: pathlib.Path, addon_dir: pathlib.Path) -> bool:
             return False
     name = path.name
     if name in EXCLUDE_NAMES:
+        return False
+    if name == ".env" or name.startswith(".env."):
         return False
     if path.is_dir():
         return path.name not in EXCLUDE_DIRS

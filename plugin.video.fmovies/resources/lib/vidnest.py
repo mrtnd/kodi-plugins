@@ -45,7 +45,10 @@ def maybe_decrypt(payload: dict) -> dict:
 def build_url(server: str, kind: str, vid: str,
               season: str | None = None, episode: str | None = None) -> str:
     if kind == 'tv' and season and episode:
-        return '{}/{}/tv/{}/{}/{}'.format(VIDNEST_API, server, vid, season, episode)
+        season_s, episode_s = str(season), str(episode)
+        if not season_s.isdigit() or not episode_s.isdigit():
+            raise ValueError('non-numeric season/episode')
+        return '{}/{}/tv/{}/{}/{}'.format(VIDNEST_API, server, vid, season_s, episode_s)
     return '{}/{}/{}/{}'.format(VIDNEST_API, server, kind, vid)
 
 

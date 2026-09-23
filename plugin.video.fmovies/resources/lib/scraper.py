@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlencode, urljoin
+from urllib.parse import quote, urlencode, urljoin
 
 import requests  # kept: tests patch resources.lib.scraper.requests.Session.get
 from resources.lib.http import (
@@ -71,8 +71,10 @@ class FMoviesScraper:
         if not img_el:
             return ''
         thumb = img_el.get('data-src') or img_el.get('src') or ''
-        if thumb and not thumb.startswith(('http', 'data:')):
+        if thumb and not thumb.startswith(('https://', 'http://', 'data:image/')):
             thumb = urljoin(self.base_url, thumb)
+        if thumb and not thumb.startswith(('https://', 'http://', 'data:image/')):
+            return ''
         return thumb
 
     @staticmethod
@@ -110,7 +112,10 @@ class FMoviesScraper:
             meta = payload.get('meta') or {}
             if total is None:
                 total = meta.get('total_items', len(data))
-            items.extend(self._parse_search_entry(e) for e in data)
+            items.extend(
+                item for e in data
+                if (item := self._parse_search_entry(e)) is not None
+            )
             offset += len(data)
             if not data or (total is not None and offset >= total):
                 break
@@ -121,7 +126,11 @@ class FMoviesScraper:
 
     def _parse_search_entry(self, entry):
         title = entry.get('t', 'Unknown Title')
-        slug = entry.get('s', '')
+        slug = str(entry.get('s', ''))
+        if not re.fullmatch(r'[A-Za-z0-9-]{1,128}', slug):
+            slug = quote(slug, safe='')
+        if not slug:
+            return None
         quality = entry.get('q', '')
         year = entry.get('y', '')
         media_type = 'tvshow' if entry.get('d') == 's' else 'movie'
@@ -204,11 +213,13 @@ class FMoviesScraper:
 
         og_img = soup.select_one('meta[property="og:image"]')
         backdrop = og_img.get('content', '').strip() if og_img else ''
-        if not backdrop:
+        if not backdrop.startswith(('https://', 'http://', 'data:image/')):
             img = soup.select_one('#cover-img, .cover_follow, img')
             backdrop = img.get('data-src') or img.get('src') or '' if img else ''
-            if backdrop and not backdrop.startswith(('http', 'data:')):
+            if backdrop and not backdrop.startswith(('https://', 'http://', 'data:image/')):
                 backdrop = urljoin(page_url or '/', backdrop)
+        if not backdrop.startswith(('https://', 'http://', 'data:image/')):
+            backdrop = ''
 
         genres = cls._row_values(soup, 'Genre')
         actors = cls._row_values(soup, 'Actor')
