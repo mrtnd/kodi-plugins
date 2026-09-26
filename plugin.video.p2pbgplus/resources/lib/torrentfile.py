@@ -48,10 +48,7 @@ def file_entries(meta: dict) -> list:
     return [(name, info.get(b'length', 0))]
 
 
-def largest_video_index(entries: list) -> int | None:
-    """Index of the largest video file, or None when no video file exists."""
-    best, best_size = None, -1
-    for i, (path, size) in enumerate(entries):
-        if path.lower().endswith(VIDEO_EXTS) and size > best_size:
-            best, best_size = i, size
-    return best
+def video_files(entries: list) -> list:
+    """[(torrent index, path, size)] of video files, in torrent order."""
+    return [(i, path, size) for i, (path, size) in enumerate(entries)
+            if path.lower().endswith(VIDEO_EXTS)]

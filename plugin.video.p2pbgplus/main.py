@@ -9,7 +9,9 @@ from resources.lib.kodi_utils import (
     get_search_history, get_setting, notify,
 )
 from resources.lib.p2pbg import AuthError, CATEGORIES, P2PBGClient
-from resources.lib.playback import list_catalog, play_torrent, search_and_show
+from resources.lib.playback import (
+    list_catalog, list_files, play_torrent, search_and_show,
+)
 
 
 def _client():
@@ -114,7 +116,11 @@ def router(paramstring):
             show_blocking('Tracker login failed: {}'.format(exc))
             return
         play_torrent(client, params.get('id', ''),
-                     params.get('title', ''))
+                     params.get('title', ''),
+                     file_index=params.get('file_index'))
+    elif action == 'files':
+        list_files(_client(), params.get('id', ''),
+                   params.get('title', ''))
     else:
         main_menu()
 

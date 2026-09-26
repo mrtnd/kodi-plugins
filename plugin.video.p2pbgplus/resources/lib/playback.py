@@ -55,9 +55,8 @@ def show_items(items, next_page, category):
             item['size'], badge)
         art = {'poster': item['poster'],
                'thumb': item['poster']} if item.get('poster') else None
-        add_dir_item(label, {'action': 'play', 'id': item['id'],
+        add_dir_item(label, {'action': 'files', 'id': item['id'],
                              'title': item['title']},
-                     is_folder=False,
                      info={'title': item['title']}, art=art)
     if next_page:
         add_dir_item('Следваща страница >>',
@@ -100,7 +99,48 @@ def search_and_show(client, query):
     show_items(items, next_page, 'Search: {}'.format(query))
 
 
-def play_torrent(client, tid, title=''):
+def _fetch_torrent(client, tid):
+    """Details + .torrent bytes + decoded meta, with user-facing errors."""
+    try:
+        details = client.details(tid)
+    except AuthError as exc:
+        return None, 'Tracker login failed: {}'.format(exc)
+    except Exception as exc:
+        return None, 'Failed to load torrent details: {}'.format(exc)
+    if not details.get('torrent_url'):
+        return None, 'No downloadable torrent file on the details page.'
+    try:
+        raw = client.download_torrent(details['torrent_url'])
+        meta = torrentfile.bdecode(raw)
+    except Exception as exc:
+        return None, 'Failed to fetch torrent file: {}'.format(exc)
+    return (details, raw, meta), ''
+
+
+def list_files(client, tid, title=''):
+    """Episode/file picker. Single-video torrents play immediately."""
+    from resources.lib.kodi_utils import add_dir_item, end_directory
+    result, error = _fetch_torrent(client, tid)
+    if error:
+        show_blocking(error)
+        return
+    _details, _raw, meta = result
+    videos = torrentfile.video_files(torrentfile.file_entries(meta))
+    if not videos:
+        show_blocking('No video file inside this torrent.')
+        return
+    if len(videos) == 1:
+        play_torrent(client, tid, title, file_index=videos[0][0])
+        return
+    for index, path, _size in videos:
+        name = path.split('/')[-1]
+        add_dir_item(name, {'action': 'play', 'id': tid,
+                            'title': name, 'file_index': str(index)},
+                     is_folder=False, info={'title': name})
+    end_directory(title or 'Select file')
+
+
+def play_torrent(client, tid, title='', file_index=None):
     if not elementum_present():
         notify('Install the Elementum add-on first (torrent engine).')
         return
@@ -113,28 +153,20 @@ def play_torrent(client, tid, title=''):
             'while the check does not pass.'.format(label or '?',
                                                     gate.country))
         return
-    try:
-        details = client.details(tid)
-    except AuthError as exc:
-        show_blocking('Tracker login failed: {}'.format(exc))
+    result, error = _fetch_torrent(client, tid)
+    if error:
+        show_blocking(error)
         return
-    except Exception as exc:
-        show_blocking('Failed to load torrent details: {}'.format(exc))
-        return
-    if not details.get('torrent_url'):
-        show_blocking('No downloadable torrent file on the details page.')
-        return
-    try:
-        raw = client.download_torrent(details['torrent_url'])
-        meta = torrentfile.bdecode(raw)
-    except Exception as exc:
-        show_blocking('Failed to fetch torrent file: {}'.format(exc))
-        return
-    entries = torrentfile.file_entries(meta)
-    index = torrentfile.largest_video_index(entries)
-    if index is None:
+    _details, raw, meta = result
+    videos = torrentfile.video_files(torrentfile.file_entries(meta))
+    if not videos:
         show_blocking('No video file inside this torrent.')
         return
+    try:
+        wanted = int(file_index) if file_index is not None else None
+    except (TypeError, ValueError):
+        wanted = None
+    index = wanted if wanted in [v[0] for v in videos] else videos[0][0]
     path = os.path.join(get_profile_dir(), 'elementum_temp.torrent')
     try:
         with open(path, 'wb') as handle:
