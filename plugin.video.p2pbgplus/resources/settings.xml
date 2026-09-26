@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category id="general" label="30000">
-        <setting id="p2pbg_user" type="string" label="30001" default=""/>
-        <setting id="p2pbg_password" type="string" option="hidden" label="30002" default=""/>
-        <setting id="base_url" type="string" label="30003" default="https://www.p2pbg.com"/>
+    <category label="30000">
+        <setting label="30001" type="text" id="p2pbg_user" default=""/>
+        <setting label="30002" type="text" id="p2pbg_password" option="hidden" default=""/>
+        <setting label="30003" type="text" id="base_url" default="https://www.p2pbg.com"/>
     </category>
-    <category id="streaming" label="30010">
-        <setting id="vpn_country" type="string" label="30011" default="BG"/>
-        <setting id="prefer_bgaudio" type="boolean" label="30012" default="true"/>
-        <setting id="min_seeders" type="text" label="30013" default="1"/>
-        <setting id="show_xxx" type="boolean" label="30014" default="false"/>
+    <category label="30010">
+        <setting label="30011" type="text" id="vpn_country" default="BG"/>
+        <setting label="30012" type="bool" id="prefer_bgaudio" default="true"/>
+        <setting label="30013" type="text" id="min_seeders" default="1"/>
+        <setting label="30014" type="bool" id="show_xxx" default="false"/>
     </category>
-    <category id="history" label="30020">
-        <setting id="search_history" type="string" label="30021" default="" visible="false"/>
+    <category label="30020">
+        <setting label="30021" type="text" id="search_history" default="" visible="false"/>
     </category>
 </settings>
