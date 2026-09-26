@@ -1,0 +1,47 @@
+# Kodi Media Center language file
+# Addon: plugin.video.p2pbg
+msgid ""
+msgstr ""
+"Project-Id-Version: plugin.video.p2pbg\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "#30000"
+msgid "General"
+msgstr "General"
+
+msgctxt "#30001"
+msgid "p2pbg username or email"
+msgstr "p2pbg username or email"
+
+msgctxt "#30002"
+msgid "p2pbg password (local settings only)"
+msgstr "p2pbg password (local settings only)"
+
+msgctxt "#30003"
+msgid "Tracker base URL"
+msgstr "Tracker base URL"
+
+msgctxt "#30010"
+msgid "Streaming"
+msgstr "Streaming"
+
+msgctxt "#30011"
+msgid "Required VPN country code (fail-closed)"
+msgstr "Required VPN country code (fail-closed)"
+
+msgctxt "#30012"
+msgid "Prefer Bulgarian audio releases"
+msgstr "Prefer Bulgarian audio releases"
+
+msgctxt "#30013"
+msgid "Minimum seeders"
+msgstr "Minimum seeders"
+
+msgctxt "#30020"
+msgid "History"
+msgstr "History"
+
+msgctxt "#30021"
+msgid "Search history"
+msgstr "Search history"
