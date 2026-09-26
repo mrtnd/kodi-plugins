@@ -2,7 +2,7 @@
 <settings>
     <category id="general" label="30000">
         <setting id="p2pbg_user" type="string" label="30001" default=""/>
-        <setting id="p2pbg_password" type="password" label="30002" default=""/>
+        <setting id="p2pbg_password" type="string" option="hidden" label="30002" default=""/>
         <setting id="base_url" type="string" label="30003" default="https://www.p2pbg.com"/>
     </category>
     <category id="streaming" label="30010">

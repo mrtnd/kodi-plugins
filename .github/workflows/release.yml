@@ -43,6 +43,50 @@ jobs:
               assert root.get('id') and root.get('version'), f'missing id/version in {f}'
           EOF
 
+      - name: Validate settings.xml files
+        run: |
+          python3 - <<'EOF'
+          import glob, os, re, xml.etree.ElementTree as ET, sys
+          # Old-format setting types accepted by Kodi; anything else (e.g.
+          # type="password") breaks the whole settings dialog. Passwords must
+          # be type="string" option="hidden".
+          VALID_TYPES = {'string', 'boolean', 'integer', 'number', 'select',
+                         'enum', 'labelenum', 'slider', 'file', 'folder',
+                         'action', 'addon', 'date', 'time', 'ipaddress',
+                         'color', 'label', 'lsep', 'sep'}
+          ok = True
+          for f in glob.glob('plugin.*/resources/settings.xml'):
+              addon = f.split('/')[0]
+              root = ET.parse(f).getroot()
+              labels = []
+              for s in root.iter('setting'):
+                  sid, stype = s.get('id'), s.get('type')
+                  label = s.get('label', '')
+                  print(f"{f}: id={sid} type={stype} label={label}")
+                  if stype not in VALID_TYPES:
+                      print(f"ERROR: invalid setting type {stype!r} in {f}")
+                      ok = False
+                  if label.isdigit():
+                      labels.append(label)
+              for c in root.iter('category'):
+                  if c.get('label', '').isdigit():
+                      labels.append(c.get('label'))
+              # every numeric label must resolve in an English strings.po
+              po = os.path.join(addon, 'resources/language',
+                                'resource.language.en_gb/strings.po')
+              if labels:
+                  if not os.path.exists(po):
+                      print(f"ERROR: {f} uses numeric labels but {po} missing")
+                      ok = False
+                  else:
+                      text = open(po, encoding='utf-8').read()
+                      for label in labels:
+                          if f'msgctxt "#{label}"' not in text:
+                              print(f"ERROR: label {label} missing in {po}")
+                              ok = False
+          sys.exit(0 if ok else 1)
+          EOF
+
       - name: Run pytest (all addons)
         run: |
           for d in plugin.*/; do
