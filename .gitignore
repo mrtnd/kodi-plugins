@@ -56,6 +56,9 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Private tracker snapshots (may contain session-specific data) - never commit
+/p2pbg.com/
+
 # Legacy local-only artifacts in the working folder (pre-CI manual builds/notes).
 # Root-anchored so plugin assets like plugin.video.fmovies/icon.png still commit.
 /plugin.video.fmovies*.zip
