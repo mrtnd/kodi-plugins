@@ -1,0 +1,35 @@
+# Kodi Media Center language file
+# Addon: plugin.video.fmovies
+msgid ""
+msgstr ""
+"Project-Id-Version: plugin.video.fmovies\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "#30000"
+msgid "General"
+msgstr "General"
+
+msgctxt "#30001"
+msgid "Base URL (change if blocked by ISP)"
+msgstr "Base URL (change if blocked by ISP)"
+
+msgctxt "#30002"
+msgid "Default quality"
+msgstr "Default quality"
+
+msgctxt "#30003"
+msgid "Preferred server"
+msgstr "Preferred server"
+
+msgctxt "#30004"
+msgid "Use InputStream Adaptive for HLS"
+msgstr "Use InputStream Adaptive for HLS"
+
+msgctxt "#30010"
+msgid "History"
+msgstr "History"
+
+msgctxt "#30011"
+msgid "Search history"
+msgstr "Search history"

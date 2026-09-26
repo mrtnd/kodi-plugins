@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<settings version="2">
+<settings>
     <category id="general" label="30000">
         <setting id="base_url" type="string" label="30001" default="https://fmoviess.org"/>
         <setting id="default_quality" type="select" label="30002" default="Auto" values="Auto|1080p|720p|480p"/>
