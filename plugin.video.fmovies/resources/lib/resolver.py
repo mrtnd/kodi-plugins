@@ -344,25 +344,25 @@ class StreamResolver:
         else:
             raise ResolveError(' // '.join(errors))
         kodi_headers = dict(GENERIC_HEADERS)
-        # Per-stream headers win, but only from a narrow allowlist: several
-        # hosts enforce their own Referer. Arbitrary payload header names and
-        # raw values must never reach requests or the Kodi pipe suffix.
-        allowed = {}
-        for key in ('Referer', 'User-Agent', 'Origin'):
-            value = (headers or {}).get(key)
-            if not isinstance(value, str) or not value or len(value) >= 2048:
-                continue
-            clean = re.sub(r'[\r\n|&]', '', value).strip()
-            if not clean:
-                continue
-            if key in ('Referer', 'Origin') and not clean.startswith(('https://', 'http://')):
-                continue
-            allowed[key] = clean
-        kodi_headers.update(allowed)
-        # Per-stream headers win: several hosts enforce their own Referer.
-        referer = allowed.get('Referer') or NETODA_BASE + '/'
-        suffix = 'Referer={}&User-Agent={}'.format(
-            referer, kodi_headers.get('User-Agent', GENERIC_HEADERS['User-Agent']))
+        kodi_headers.update(headers or {})
+        # Per-stream headers win: several hosts enforce their own Referer,
+        # Accept, or Connection values, so the full payload dict is forwarded
+        # (verified working set). Only CR/LF are stripped from the two values
+        # interpolated into the Kodi pipe suffix; legit values never contain
+        # them. NOTE: a previous allowlist (Referer/User-Agent/Origin only)
+        # broke playback on hosts needing extra headers, so it was reverted;
+        # see audit record resolver.py:344:kodi-suffix-injection (needs
+        # validation: player honoring of crafted suffix headers unproven).
+        def _suffix_safe(value, default=''):
+            if not isinstance(value, str) or not value:
+                return default
+            return re.sub(r'[\r\n]', '', value).strip() or default
+        referer = _suffix_safe(
+            (headers or {}).get('Referer'), NETODA_BASE + '/')
+        user_agent = _suffix_safe(
+            kodi_headers.get('User-Agent', GENERIC_HEADERS['User-Agent']),
+            GENERIC_HEADERS['User-Agent'])
+        suffix = 'Referer={}&User-Agent={}'.format(referer, user_agent)
         resolved = ResolvedURL('{}|{}'.format(url, suffix))
         resolved.subtitles = tuple(subs or ())
         return resolved

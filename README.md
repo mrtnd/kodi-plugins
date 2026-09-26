@@ -7,7 +7,7 @@ Current plugins:
 
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
-| FMovies | `plugin.video.fmovies` | `1.2.5` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
+| FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
