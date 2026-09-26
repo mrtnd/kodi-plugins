@@ -48,12 +48,13 @@ jobs:
           python3 - <<'EOF'
           import glob, os, re, xml.etree.ElementTree as ET, sys
           # Old-format setting types accepted by Kodi; anything else (e.g.
-          # type="password") breaks the whole settings dialog. Passwords must
-          # be type="string" option="hidden".
-          VALID_TYPES = {'string', 'boolean', 'integer', 'number', 'select',
+          # type="password", type="integer") breaks the whole settings
+          # dialog. Passwords must be type="string" option="hidden",
+          # numbers type="text" parsed in code.
+          VALID_TYPES = {'string', 'boolean', 'number', 'select',
                          'enum', 'labelenum', 'slider', 'file', 'folder',
                          'action', 'addon', 'date', 'time', 'ipaddress',
-                         'color', 'label', 'lsep', 'sep'}
+                         'color', 'label', 'lsep', 'sep', 'text', 'bool'}
           ok = True
           for f in glob.glob('plugin.*/resources/settings.xml'):
               addon = f.split('/')[0]

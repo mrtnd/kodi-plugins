@@ -8,7 +8,7 @@
     <category id="streaming" label="30010">
         <setting id="vpn_country" type="string" label="30011" default="BG"/>
         <setting id="prefer_bgaudio" type="boolean" label="30012" default="true"/>
-        <setting id="min_seeders" type="integer" label="30013" default="1"/>
+        <setting id="min_seeders" type="text" label="30013" default="1"/>
         <setting id="show_xxx" type="boolean" label="30014" default="false"/>
     </category>
     <category id="history" label="30020">

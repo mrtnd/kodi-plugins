@@ -27,11 +27,18 @@ def _gate():
     return VPNGate(country=get_setting('vpn_country') or 'BG')
 
 
+def _min_seeders():
+    try:
+        return max(0, int((get_setting('min_seeders') or '1').strip()))
+    except (TypeError, ValueError):
+        return 1
+
+
 def _prefs():
     return {
         'bgaudio': get_setting('prefer_bgaudio') == 'true',
         'show_xxx': get_setting('show_xxx') == 'true',
-        'min_seeders': int(get_setting('min_seeders') or 1),
+        'min_seeders': _min_seeders(),
     }
 
 
