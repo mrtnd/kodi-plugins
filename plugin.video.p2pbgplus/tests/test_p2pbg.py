@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from resources.lib import torrentfile
 from resources.lib.p2pbg import (
-    CATEGORIES, build_magnet, parse_details, parse_next_page,
+    CATEGORIES, parse_details, parse_next_page,
     parse_search_rows, rank_items,
 )
 from resources.lib.vpngate import VPNGate, parse_country
@@ -128,17 +128,6 @@ class TestTorrentFile(unittest.TestCase):
         entries = torrentfile.file_entries(meta)
         self.assertEqual(len(entries), 2)
         self.assertEqual(torrentfile.largest_video_index(entries), 0)
-        self.assertIn('passkey=KP', torrentfile.announce_url(meta))
-        import hashlib
-        self.assertEqual(len(torrentfile.bencode_info_hash(raw)), 40)
-
-    def test_magnet_private_only(self):
-        magnet, index = build_magnet(
-            'a' * 40, 'show.s01e01.mkv',
-            'https://tracker.example/announce?passkey=KP', 0)
-        self.assertTrue(magnet.startswith('magnet:?xt=urn:btih:' + 'a' * 40))
-        self.assertIn('tr=https%3A', magnet)
-        self.assertEqual(index, 0)
 
 
 class TestGate(unittest.TestCase):

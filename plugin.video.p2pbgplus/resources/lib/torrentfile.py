@@ -32,29 +32,6 @@ def _decode(data: bytes, pos: int):
     raise ValueError('invalid bencode at offset {}'.format(pos))
 
 
-def bencode_info_hash(torrent_bytes: bytes) -> str:
-    """SHA1 hex of the bencoded info dict (the torrent info-hash)."""
-    import hashlib
-    raw_info = _raw_info_dict(torrent_bytes)
-    return hashlib.sha1(raw_info).hexdigest()
-
-
-def _raw_info_dict(torrent_bytes: bytes) -> bytes:
-    # Locate the 'info' dict value span by re-walking the top-level dict.
-    pos = 0
-    if torrent_bytes[pos:pos + 1] != b'd':
-        raise ValueError('torrent root is not a dict')
-    pos += 1
-    while torrent_bytes[pos:pos + 1] != b'e':
-        key, pos = _decode(torrent_bytes, pos)
-        if key == b'info':
-            start = pos
-            _, pos = _decode(torrent_bytes, pos)
-            return torrent_bytes[start:pos]
-        _, pos = _decode(torrent_bytes, pos)
-    raise ValueError('no info dict in torrent')
-
-
 VIDEO_EXTS = ('.mkv', '.mp4', '.avi', '.ts', '.m2ts', '.webm', '.mov', '.wmv')
 
 
@@ -78,7 +55,3 @@ def largest_video_index(entries: list) -> int | None:
         if path.lower().endswith(VIDEO_EXTS) and size > best_size:
             best, best_size = i, size
     return best
-
-
-def announce_url(meta: dict) -> str:
-    return meta.get(b'announce', b'').decode('utf-8', 'replace')

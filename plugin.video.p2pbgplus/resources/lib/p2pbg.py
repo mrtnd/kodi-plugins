@@ -279,13 +279,3 @@ def rank_items(items, min_seeders=1, prefer_bgaudio=True):
     else:
         out.sort(key=lambda it: -it.get('seeders', 0))
     return out
-
-
-def build_magnet(info_hash, name, announce, file_index=None):
-    """Private-tracker magnet: info-hash + tracker announce only (no DHT leak)."""
-    from urllib.parse import quote
-    parts = ['xt=urn:btih:{}'.format(info_hash), 'dn={}'.format(quote(name))]
-    if announce:
-        parts.append('tr={}'.format(quote(announce, safe='')))
-    magnet = 'magnet:?' + '&'.join(parts)
-    return magnet, file_index

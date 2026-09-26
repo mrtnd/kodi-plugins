@@ -3,7 +3,6 @@ import json
 import os
 import sys
 
-import xbmc
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
@@ -45,19 +44,6 @@ def get_profile_dir():
     except Exception:
         pass
     return profile
-
-
-def _profile_subdir(name):
-    path = os.path.join(get_profile_dir(), name)
-    try:
-        os.makedirs(path, exist_ok=True)
-    except Exception:
-        pass
-    return path
-
-
-def get_torrents_dir():
-    return _profile_subdir('torrents')
 
 
 def get_search_history():

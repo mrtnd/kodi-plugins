@@ -29,15 +29,33 @@ def _prefs():
 def main_menu():
     import datetime
     year = datetime.date.today().year
+    _first_run_check()
     add_dir_item('Търсене', {'action': 'search_menu'})
     add_dir_item('Последно добавени', {'action': 'catalog',
                                        'url': 'latest'})
-    add_dir_item('Филми от {} година'.format(year),
-                 {'action': 'search', 'query': str(year)})
+    for offset in range(3):
+        add_dir_item('Филми от {} година'.format(year - offset),
+                     {'action': 'search', 'query': str(year - offset)})
     for cat_id, cat_name in CATEGORIES:
         add_dir_item(cat_name, {'action': 'catalog',
                                 'url': 'cat:' + cat_id})
     end_directory('P2PBG+ Torrents')
+
+
+def _first_run_check():
+    import xbmcaddon
+    addon = xbmcaddon.Addon()
+    try:
+        first = addon.getSetting('firstrun') != 'false'
+    except Exception:
+        first = False
+    if first and not get_setting('p2pbg_user'):
+        notify('Въведете потребител и парола в Настройки.')
+        addon.openSettings()
+    try:
+        addon.setSetting('firstrun', 'false')
+    except Exception:
+        pass
 
 
 def _catalog_url(spec):

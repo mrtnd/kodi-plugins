@@ -8,6 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.2.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 

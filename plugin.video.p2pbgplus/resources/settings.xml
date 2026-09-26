@@ -12,6 +12,7 @@
         <setting label="30014" type="bool" id="show_xxx" default="false"/>
     </category>
     <category label="30020">
+        <setting label="" type="text" id="firstrun" default="true" visible="false"/>
         <setting label="30021" type="text" id="search_history" default="" visible="false"/>
     </category>
 </settings>
