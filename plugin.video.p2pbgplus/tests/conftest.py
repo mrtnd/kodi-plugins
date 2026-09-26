@@ -8,7 +8,7 @@ class MockAddon:
             'base_url': 'https://www.p2pbg.com',
             'p2pbg_user': '', 'p2pbg_password': '',
             'vpn_country': 'BG', 'prefer_bgaudio': 'true',
-            'min_seeders': '1', 'search_history': '',
+            'min_seeders': '1', 'show_xxx': 'false', 'search_history': '',
         }
 
     def getSetting(self, key):

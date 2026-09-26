@@ -1,4 +1,4 @@
-"""Kodi entry point: search p2pbg torrents, gate VPN, play via Elementum."""
+"""Kodi entry point: categories, search, catalog, VPN-gated Elementum play."""
 import sys
 from urllib.parse import parse_qsl
 
@@ -8,8 +8,8 @@ from resources.lib.kodi_utils import (
     add_dir_item, add_search_history, clear_search_history, end_directory,
     get_search_history, get_setting, notify,
 )
-from resources.lib.p2pbg import AuthError, P2PBGClient
-from resources.lib.playback import play_torrent, search_and_show
+from resources.lib.p2pbg import AuthError, CATEGORIES, P2PBGClient
+from resources.lib.playback import list_catalog, play_torrent, search_and_show
 
 
 def _client():
@@ -19,9 +19,41 @@ def _client():
         password=get_setting('p2pbg_password'))
 
 
+def _prefs():
+    return {
+        'bgaudio': get_setting('prefer_bgaudio') == 'true',
+        'show_xxx': get_setting('show_xxx') == 'true',
+    }
+
+
 def main_menu():
-    add_dir_item('Search', {'action': 'search_menu'})
-    end_directory('P2PBG')
+    import datetime
+    year = datetime.date.today().year
+    add_dir_item('Търсене', {'action': 'search_menu'})
+    add_dir_item('Последно добавени', {'action': 'catalog',
+                                       'url': 'latest'})
+    add_dir_item('Филми от {} година'.format(year),
+                 {'action': 'search', 'query': str(year)})
+    for cat_id, cat_name in CATEGORIES:
+        add_dir_item(cat_name, {'action': 'catalog',
+                                'url': 'cat:' + cat_id})
+    end_directory('P2PBG+ Torrents')
+
+
+def _catalog_url(spec):
+    from urllib.parse import urlencode
+    prefs = _prefs()
+    params = {'active': '1', 'hidexxx': 'off' if prefs['show_xxx'] else 'on'}
+    if prefs['bgaudio']:
+        params['bgaudio'] = '1'
+    if spec == 'latest':
+        base = '/torrents'
+    elif spec.startswith('cat:'):
+        params['category'] = spec[4:]
+        base = '/torrents'
+    else:
+        return spec  # next-page absolute URL
+    return _client().base_url + base + '?' + urlencode(params)
 
 
 def search_menu():
@@ -49,6 +81,9 @@ def router(paramstring):
         new_search()
     elif action == 'search':
         search_and_show(_client(), params.get('query', ''))
+    elif action == 'catalog':
+        list_catalog(_client(), _catalog_url(params.get('url', 'latest')),
+                     params.get('title', 'Catalog'))
     elif action == 'clear_history':
         clear_search_history()
         notify('Search history cleared.')

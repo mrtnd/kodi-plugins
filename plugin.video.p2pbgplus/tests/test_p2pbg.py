@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from resources.lib import torrentfile
 from resources.lib.p2pbg import (
-    build_magnet, parse_details, parse_search_rows, rank_items,
+    CATEGORIES, build_magnet, parse_details, parse_next_page,
+    parse_search_rows, rank_items,
 )
 from resources.lib.vpngate import VPNGate, parse_country
 
@@ -18,7 +19,7 @@ SEARCH_HTML = '''
 <th>Добавен</th><th>Размер</th><th>S</th><th>L</th><th>D</th></tr></thead>
 <tbody>
 <tr><td>1</td>
-<td><a href="https://www.p2pbg.com/torrents/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">Example.Show.S01.1080p.WEB.H264-GRP</a></td>
+<td><div><a href="https://www.p2pbg.com/torrents/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">Example.Show.S01.1080p.WEB.H264-GRP</a><div><img src="/img/bgaudio.gif"></div></div></td>
 <td>dl</td><td>2</td><td>01/09/26</td><td>4.20 GB</td><td>15</td><td>3</td><td>100</td></tr>
 <tr><td>1</td>
 <td><a href="https://www.p2pbg.com/torrents/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">Example.Show.S01.1080p.BG.AUDIO-WEB</a></td>
@@ -90,6 +91,25 @@ class TestSearchParse(unittest.TestCase):
 
     def test_empty_table(self):
         self.assertEqual(parse_search_rows('<html></html>', 'https://x'), [])
+
+    def test_poster_flags_and_next_page(self):
+        from resources.lib.p2pbg import _row_has_flag, _row_poster, BGAUDIO_FLAGS
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(SEARCH_HTML, 'html.parser')
+        tr = soup.select('tbody tr')[0]
+        self.assertTrue(_row_has_flag(tr, BGAUDIO_FLAGS))
+        self.assertEqual(_row_poster(tr), '')
+        page = ('<html><body><a href="/torrents?search=x&page=2">&gt;</a>'
+                '</body></html>')
+        self.assertEqual(
+            parse_next_page(page, 'https://www.p2pbg.com'),
+            'https://www.p2pbg.com/torrents?search=x&page=2')
+        self.assertEqual(parse_next_page('<html></html>', 'https://x'), '')
+
+    def test_categories_cover_video(self):
+        ids = ';'.join(cat for cat, _ in CATEGORIES)
+        for want in ['68', '60', '14', '24', '5', '57']:
+            self.assertIn(want, ids)
 
 
 class TestDetailsParse(unittest.TestCase):

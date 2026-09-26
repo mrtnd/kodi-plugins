@@ -33,14 +33,22 @@ def elementum_present() -> bool:
         return False
 
 
-def _profile_subdir(name):
+def get_profile_dir():
     try:
         import xbmcvfs
         profile = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
     except Exception:
         import tempfile
-        profile = os.path.join(tempfile.gettempdir(), 'plugin.video.p2pbg')
-    path = os.path.join(profile, name)
+        profile = os.path.join(tempfile.gettempdir(), 'plugin.video.p2pbgplus')
+    try:
+        os.makedirs(profile, exist_ok=True)
+    except Exception:
+        pass
+    return profile
+
+
+def _profile_subdir(name):
+    path = os.path.join(get_profile_dir(), name)
     try:
         os.makedirs(path, exist_ok=True)
     except Exception:
@@ -79,11 +87,16 @@ def build_url(params):
     return '{}?{}'.format(sys.argv[0], urlencode(params))
 
 
-def add_dir_item(title, params, is_folder=True, info=None):
+def add_dir_item(title, params, is_folder=True, info=None, art=None):
     url = build_url(params)
     item = xbmcgui.ListItem(label=title)
     if not is_folder:
         item.setProperty('IsPlayable', 'true')
+    if art:
+        try:
+            item.setArt(art)
+        except Exception:
+            pass
     if info:
         try:
             item.getVideoInfoTag().setTitle(info.get('title', title))
