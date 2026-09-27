@@ -26,7 +26,7 @@ DETAILS_HTML = ('<h1>Silo S03E10</h1><a href="https://www.p2pbg.com/download.php
 SETTINGS = {
     'p2pbg_user': 'user', 'p2pbg_password': 'pass', 'vpn_country': 'BG',
     'prefer_bgaudio': 'true', 'show_xxx': 'false', 'firstrun': 'false',
-    'start_at_last': 'true', 'search_history': '',
+    'search_history': '',
 }
 
 
@@ -139,7 +139,7 @@ class TestNavigation(unittest.TestCase):
         SETTINGS.update({'p2pbg_user': 'user', 'p2pbg_password': 'pass',
                          'vpn_country': 'BG', 'prefer_bgaudio': 'true',
                          'show_xxx': 'false', 'firstrun': 'false',
-                         'start_at_last': 'true', 'search_history': ''})
+                         'search_history': ''})
         LISTING_URL = ('https://www.p2pbg.com/torrents?fakeusernameremembered=&'
                        'fakepasswordremembered=&search=&category=68&active=1&'
                        'hidexxx=1')
@@ -184,10 +184,14 @@ class TestNavigation(unittest.TestCase):
                           'Сериали Boxset', 'Всички филми и сериали',
                           'Диагностика'])
 
-    def test_open_without_query_reopens_last_listing(self):
+    def test_open_without_query_always_shows_the_menu(self):
+        # even with a visited listing on record, the root is the menu:
+        # auto-reopening stranded users on the last list with no way back
         self.run_plugin('?url=%s&mode=1&name=x&iconimage=/x.png' % self.encoded)
+        self.assertTrue(SETTINGS['last_listing'])
         items = self.run_plugin('')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.playable(items), [])
+        self.assertIn('Филми HD', self.folders(items))
 
     def test_open_without_query_without_history_shows_menu(self):
         items = self.run_plugin('')
@@ -196,11 +200,13 @@ class TestNavigation(unittest.TestCase):
                           'Сериали Boxset', 'Всички филми и сериали',
                           'Диагностика'])
 
-    def test_menu_used_when_start_at_last_disabled(self):
-        SETTINGS['start_at_last'] = 'false'
-        self.run_plugin('?url=%s&mode=1&name=x&iconimage=/x.png' % self.encoded)
+    def test_back_from_listing_returns_to_menu(self):
+        # the menu reached from a listing-equivalent root shows every entry
         items = self.run_plugin('')
-        self.assertIn('Всички филми и сериали', self.folders(items))
+        self.assertEqual(self.folders(items),
+                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
+                          'Сериали Boxset', 'Всички филми и сериали',
+                          'Диагностика'])
 
     # -- search --------------------------------------------------------
     def test_search_screen_offers_search(self):

@@ -34,10 +34,6 @@ msgctxt "#30014"
 msgid "Show adult (XXX) categories"
 msgstr "Show adult (XXX) categories"
 
-msgctxt "#30015"
-msgid "Open the last used category instead of the main menu"
-msgstr "Open the last used category instead of the main menu"
-
 msgctxt "#30020"
 msgid "History"
 msgstr "History"

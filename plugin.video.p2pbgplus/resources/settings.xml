@@ -8,7 +8,6 @@
         <setting label="30011" type="text" id="vpn_country" default="BG"/>
         <setting label="30012" type="bool" id="prefer_bgaudio" default="true"/>
         <setting label="30014" type="bool" id="show_xxx" default="false"/>
-        <setting label="30015" type="bool" id="start_at_last" default="true"/>
     </category>
     <category label="30020">
         <setting label="" type="text" id="firstrun" default="true" visible="false"/>

@@ -924,13 +924,12 @@ elif compact:
             % paramstring[:300])
 
 elif mode == None and is_root:
-    # The real add-on root: reopen the last listing, or show the menu.
-    if GetSetting('start_at_last') == 'true' and GetSetting('last_listing'):
-        INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
-                   GetSetting('last_listing'))
-    else:
-        print("")
-        CATEGORIES()
+    # The real add-on root always shows the menu. Reopening the last
+    # listing here stranded users on it: with no menu inside listings,
+    # Back exits the add-on and reopening lands on the same list again,
+    # so browsing became unreachable.
+    print("")
+    CATEGORIES()
 
 elif mode == None:
     if name and resolve_label(name):

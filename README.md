@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -202,9 +202,9 @@ Added on top of the fork:
   so failures can be read on the TV instead of guessed at.
 - **Routing**: plugin queries are parsed with `parse_qsl` (blank values and
   the trailing slash Kodi appends included). The main menu is rendered **only**
-  at the add-on root or via the `Меню` entry — never as a side effect of a click
-  that could not be resolved, which is what made every selection re-render the
-  menu as a nested folder. A listing address embedded in a mangled query
+  at the add-on root — never as a side effect of a click that could not be
+  resolved, which is what made every selection re-render the menu as a
+  nested folder. A listing address embedded in a mangled query
   (mode lost, URL re-encoded, double-encoded) is recovered and shown; if
   nothing can be resolved, the add-on reports the error instead of guessing.
   A failed listing request is reported too, so Kodi never keeps the previous
@@ -227,9 +227,8 @@ Behaviour inherited from the reference:
   be resolved, the add-on reports the error instead of substituting content
   (truncated labels resolve by unique prefix). The root menu is rendered
   with content type `files`, so it always shows folder icons.
-- Opening the add-on reopens the **last used category** instead of the root
-  menu (setting `start_at_last`, on by default); every listing has a `Меню`
-  entry at the top to get back to it.
+- Opening the add-on always shows the root menu (an earlier auto-reopen of
+  the last listing stranded users on it with no way back to browse).
 - Listing and search URLs mirror the tracker's own search form, because it
   only honours the filters when the whole query is present:
   `/torrents?fakeusernameremembered=&fakepasswordremembered=&search=<q>&category=<ids>&active=1[&bgaudio=1]&hidexxx=1`
