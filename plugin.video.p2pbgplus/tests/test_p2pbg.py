@@ -92,6 +92,28 @@ class TestSearchParse(unittest.TestCase):
     def test_empty_table(self):
         self.assertEqual(parse_search_rows('<html></html>', 'https://x'), [])
 
+    def test_new_style_preview_rows(self):
+        from resources.lib.p2pbg import _row_identity
+        from bs4 import BeautifulSoup
+        html = ('<table class="torrent-index__table"><thead><tr><th>Кат</th>'
+                '<th>Име на файл</th><th>Свали</th><th>Ком</th><th>Добавен</th>'
+                '<th>Размер</th><th>S</th><th>L</th><th>D</th></tr></thead><tbody>'
+                '<tr class="torrent-index__row" data-preview-card="' + 'd' * 40 + '">'
+                '<td class="torrent-index__col-icon">x</td>'
+                '<td class="torrent-index__name-cell"><div><a href="/torrents?search=silo" '
+                'onclick="showPreview(\'' + 'd' * 40 + '\'); return false;">Silo S03 1080p</a></div></td>'
+                '<td>dl</td><td>---</td><td>13/09/2026</td><td>4.42 GB</td>'
+                '<td>21</td><td>1</td><td>108</td></tr>'
+                '</tbody></table>')
+        soup = BeautifulSoup(html, 'html.parser')
+        items = parse_search_rows(html, 'https://www.p2pbg.com')
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], 'd' * 40)
+        self.assertEqual(items[0]['title'], 'Silo S03 1080p')
+        self.assertEqual(items[0]['seeders'], 21)
+        tid, title = _row_identity(soup.select_one('tr.torrent-index__row'))
+        self.assertEqual((tid, title), ('d' * 40, 'Silo S03 1080p'))
+
     def test_poster_flags_and_next_page(self):
         from resources.lib.p2pbg import _row_has_flag, _row_poster, BGAUDIO_FLAGS
         from bs4 import BeautifulSoup

@@ -142,30 +142,56 @@ class P2PBGClient:
         return data
 
 
+SHOW_PREVIEW = re.compile(r'''showPreview\(['"]([a-f0-9]{40})['"]\)''')
+HEX40 = re.compile(r'[a-f0-9]{40}')
+
+
+def _row_identity(tr):
+    """(tid, title) supporting both row markups.
+
+    New markup: ``tr.torrent-index__row[data-preview-card]`` whose title
+    anchor points back at the search URL with ``onclick=showPreview(id)``.
+    Legacy markup: title anchor with a ``/torrents/<40hex>`` href.
+    """
+    tid = (tr.get('data-preview-card') or '').strip()
+    if not HEX40.fullmatch(tid):
+        tid = ''
+    title, anchor = '', None
+    name_cell = tr.select_one('td.torrent-index__name-cell')
+    scope = name_cell if name_cell is not None else tr
+    for cand in scope.select('a[href]'):
+        text = cand.get_text(' ', strip=True)
+        if not text or len(text) < 3:
+            continue
+        href = cand.get('href', '')
+        if HEX_ID.search(href):
+            return HEX_ID.search(href).group(1), text
+        if 'showPreview(' in (cand.get('onclick', '') or ''):
+            anchor = cand
+            title = text
+    if not tid and anchor is not None:
+        match = SHOW_PREVIEW.search(anchor.get('onclick', ''))
+        if match:
+            tid = match.group(1)
+    if tid and not title and anchor is not None:
+        title = anchor.get_text(' ', strip=True)
+    if tid and title:
+        return tid, title
+    return None, ''
+
+
 def parse_search_rows(html_page, base_url):
     """Rows from the listing table: id, title, date, size, S/L/D, details url."""
     soup = BeautifulSoup(html_page, 'html.parser')
-    table = None
-    for candidate in soup.select('table'):
-        heads = [th.get_text(strip=True) for th in candidate.select('thead th')]
-        if any('Размер' in h for h in heads) and any(h == 'S' for h in heads):
-            table = candidate
-            break
+    table = _results_table(soup)
     if table is None:
         return []
     items = []
     for tr in table.select('tbody tr'):
         # Direct cells only: the layout nests tables for side blocks.
         cells = tr.find_all('td', recursive=False)
-        link = None
-        for cell in cells:
-            link = cell.select_one('a[href*="/torrents/"]')
-            if link:
-                break
-        if not link:
-            continue
-        match = HEX_ID.search(link.get('href', ''))
-        if not match:
+        tid, title = _row_identity(tr)
+        if not tid:
             continue
         texts = [c.get_text(' ', strip=True) for c in cells]
         size_idx = next(
@@ -186,9 +212,9 @@ def parse_search_rows(html_page, base_url):
             if re.fullmatch(r'\d{2}/\d{2}/(\d{2}|\d{4})', t) or t == 'Вчера':
                 date = t
         items.append({
-            'id': match.group(1),
-            'title': link.get_text(' ', strip=True),
-            'url': urljoin(base_url, '/torrents/' + match.group(1)),
+            'id': tid,
+            'title': title,
+            'url': urljoin(base_url, '/torrents/' + tid),
             'date': date,
             'size': texts[size_idx],
             'seeders': seeders,
@@ -219,6 +245,41 @@ def _row_has_flag(tr, names):
     for img in tr.select('img[src]'):
         src = img.get('src', '')
         if any(src.endswith(name) for name in names):
+            return True
+    return False
+
+
+def _results_table(soup):
+    """The results table below the filter form; header heuristic as fallback.
+
+    Listing pages mix a latest-additions block (same headers, mostly
+    unrelated rows) with the real results table, so first-match wins wrong.
+    The results table renders after the filter form.
+    """
+    form = soup.select_one('form[name="torrent_search"]')
+    if form is not None:
+        for table in form.find_all_next('table'):
+            classes = table.get('class', [])
+            if 'torrent-index__table' not in classes:
+                continue
+            if _table_has_rows(table):
+                return table
+    indexed = [t for t in soup.select('table.torrent-index__table')
+               if _table_has_rows(t)]
+    if indexed:
+        return indexed[0]
+    for candidate in soup.select('table'):
+        heads = [th.get_text(strip=True) for th in candidate.select('thead th')]
+        if any('Размер' in h for h in heads) and any(h == 'S' for h in heads):
+            if _table_has_rows(candidate):
+                return candidate
+    return None
+
+
+def _table_has_rows(table):
+    for tr in table.select('tbody tr'):
+        tid, _title = _row_identity(tr)
+        if tid:
             return True
     return False
 
