@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.8.1" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.8.2" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Opening the add-on always shows the root menu again: the auto-reopen of the last listing stranded users on it with no way back to browse.</news>
+        <news>Search hardening: a corrupt search-history file can no longer crash the search screen, every menu item carries its label for recovery, and any unexpected failure now reports the actual error with the recorded request instead of Kodi’s generic message.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

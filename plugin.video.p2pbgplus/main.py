@@ -39,11 +39,13 @@ def load_history():
     if xbmcvfs.exists(HISTORY_FILE):
         f = xbmcvfs.File(HISTORY_FILE, 'r')
         try:
-            return json.loads(f.read())
+            data = json.loads(f.read())
         except:
             return []
         finally:
             f.close()
+        if isinstance(data, list):
+            return [h for h in data if isinstance(h, dict)]
     return []
 
 
@@ -286,6 +288,8 @@ def build_item_url(params):
 
 
 def add_menu_item(label, params, iconimage):
+    params = dict(params)
+    params.setdefault('n', label)
     u = build_item_url(params)
     liz = xbmcgui.ListItem(label)
     liz.setArt({'thumb': iconimage, 'poster': iconimage,
@@ -893,6 +897,9 @@ try:
     ytpass = urllib.parse.unquote_plus(params["ytpass"])
 except:
     pass
+if not name:
+    # compact items carry the label as 'n'; parse_qsl already decoded it
+    name = params.get('n', '') or None
 
 
 paramstring = sys.argv[2] if len(sys.argv) > 2 else ''
@@ -909,86 +916,94 @@ compact = {key: params.get(key) for key in ('m', 'c', 'q', 'u', 'n', 'bare')
 Record('last_call', 'mode=%s url=%s raw=%s'
        % (compact.get('m', mode), (compact.get('u') or url or '')[:200],
           paramstring[:400]))
+try:
+    if compact.get('m') == '1' and compact.get('u'):
+        # Next-page link: the only compact request carrying a full URL.
+        INDEXPAGES(name or compact.get('n', '') or 'Категория', compact['u'])
 
-if compact.get('m') == '1' and compact.get('u'):
-    # Next-page link: the only compact request carrying a full URL.
-    INDEXPAGES(name or compact.get('n', '') or 'Категория', compact['u'])
+    elif compact.get('m') in ('1', '4', '5', '6', '7', '9'):
+        run_compact(compact, name or compact.get('n', ''))
 
-elif compact.get('m') in ('1', '4', '5', '6', '7', '9'):
-    run_compact(compact, name or compact.get('n', ''))
+    elif compact:
+        Log('unknown compact request: raw=%s' % paramstring)
+        Record('last_error', 'unknown request')
+        Blocked('Cannot open this item. Try it again from the menu.\n\nRequest: %s'
+                % paramstring[:300])
 
-elif compact:
-    Log('unknown compact request: raw=%s' % paramstring)
-    Record('last_error', 'unknown request')
-    Blocked('Cannot open this item. Try it again from the menu.\n\nRequest: %s'
-            % paramstring[:300])
-
-elif mode == None and is_root:
-    # The real add-on root always shows the menu. Reopening the last
-    # listing here stranded users on it: with no menu inside listings,
-    # Back exits the add-on and reopening lands on the same list again,
-    # so browsing became unreachable.
-    print("")
-    CATEGORIES()
-
-elif mode == None:
-    if name and resolve_label(name):
-        pass
-    elif (url or recover_listing_url(paramstring)) and \
-            '/torrents' in (url or recover_listing_url(paramstring)):
-        address = url or recover_listing_url(paramstring)
-        INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
-                   address)
-    elif is_root:
+    elif mode == None and is_root:
+        # The real add-on root always shows the menu. Reopening the last
+        # listing here stranded users on it: with no menu inside listings,
+        # Back exits the add-on and reopening lands on the same list again,
+        # so browsing became unreachable.
+        print("")
         CATEGORIES()
+
+    elif mode == None:
+        if name and resolve_label(name):
+            pass
+        elif (url or recover_listing_url(paramstring)) and \
+                '/torrents' in (url or recover_listing_url(paramstring)):
+            address = url or recover_listing_url(paramstring)
+            INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
+                       address)
+        elif is_root:
+            CATEGORIES()
+        else:
+            # Report with the request attached, do not substitute: showing other
+            # content here is what made every category display previous results.
+            Log('unresolvable call: raw=%s' % paramstring)
+            Record('last_error', 'unresolvable call name=%s' % name)
+            Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
+                    % (name or compact.get('n', '') or 'this item',
+                       paramstring[:300]))
+
+    elif mode == 9:
+        # Stale "Меню" entry: the menu is only ever rendered on request.
+        CATEGORIES()
+
+    elif mode == 7:
+        DIAGNOSTICS()
+
+    elif mode == 6:
+        CLEARHISTORY()
+
+    elif mode == 2:
+        print("" + url)
+        PLAY(url, name or '')
+
+    elif mode == 5:
+        SEARCHSCREEN()
+
+    elif mode in (1, 4):
+        address = url or recover_listing_url(paramstring)
+        if not address and name and resolve_label(name):
+            pass
+        elif not address:
+            Log('unresolvable call: mode=%s name=%s raw=%s'
+                % (mode, name, paramstring))
+            Record('last_error', 'unresolvable call: mode=%s' % mode)
+            Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
+                    % (name or 'this item', paramstring[:300]))
+        elif mode == 4:
+            print("" + address)
+            SEARCH(address)
+        else:
+            print("" + address)
+            INDEXPAGES(name, address)
+
     else:
-        # Report with the request attached, do not substitute: showing other
-        # content here is what made every category display previous results.
-        Log('unresolvable call: raw=%s' % paramstring)
-        Record('last_error', 'unresolvable call name=%s' % name)
-        Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
-                % (name or compact.get('n', '') or 'this item',
-                   paramstring[:300]))
-
-elif mode == 9:
-    # Stale "Меню" entry: the menu is only ever rendered on request.
-    CATEGORIES()
-
-elif mode == 7:
-    DIAGNOSTICS()
-
-elif mode == 6:
-    CLEARHISTORY()
-
-elif mode == 2:
-    print("" + url)
-    PLAY(url, name or '')
-
-elif mode == 5:
-    SEARCHSCREEN()
-
-elif mode in (1, 4):
-    address = url or recover_listing_url(paramstring)
-    if not address and name and resolve_label(name):
-        pass
-    elif not address:
-        Log('unresolvable call: mode=%s name=%s raw=%s'
-            % (mode, name, paramstring))
+        Log('unresolvable call: mode=%s url=%s raw=%s' % (mode, url, paramstring))
         Record('last_error', 'unresolvable call: mode=%s' % mode)
         Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
                 % (name or 'this item', paramstring[:300]))
-    elif mode == 4:
-        print("" + address)
-        SEARCH(address)
-    else:
-        print("" + address)
-        INDEXPAGES(name, address)
 
-else:
-    Log('unresolvable call: mode=%s url=%s raw=%s' % (mode, url, paramstring))
-    Record('last_error', 'unresolvable call: mode=%s' % mode)
-    Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
-            % (name or 'this item', paramstring[:300]))
+except Exception as exc:
+    import traceback
+    Log('dispatch failed: %r\n%s' % (exc, traceback.format_exc()))
+    Record('last_error', 'dispatch failed: %r' % (exc,))
+    Blocked('Error: %s\n\nRequest: %s'
+            % (exc, paramstring[:300]))
+
 
 # cacheToDisc=False: Kodi must never serve a saved copy of a live tracker
 # listing, otherwise a revisited category shows the previous content.

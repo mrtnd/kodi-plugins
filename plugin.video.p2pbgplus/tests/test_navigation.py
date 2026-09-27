@@ -209,6 +209,32 @@ class TestNavigation(unittest.TestCase):
                           'Диагностика'])
 
     # -- search --------------------------------------------------------
+    def _history_content(self, payload):
+        import sys as _sys
+        vfs = _sys.modules['xbmcvfs']
+        vfs.exists = lambda path: True
+        handle = MagicMock()
+        handle.read.return_value = payload
+        vfs.File = MagicMock(return_value=handle)
+
+    def _cancelled_keyboard(self):
+        import sys as _sys
+        _sys.modules['xbmcgui'].Keyboard.isConfirmed = lambda self: False
+        self.addCleanup(setattr, _sys.modules['xbmcgui'].Keyboard,
+                        'isConfirmed', Keyboard.isConfirmed)
+
+    def test_search_screen_survives_corrupt_history(self):
+        self._history_content('not json{{{')
+        self._cancelled_keyboard()
+        items = self.run_plugin('?m=5')
+        self.assertEqual(self.folders(items), ['Търсене'])
+
+    def test_search_screen_survives_non_list_history(self):
+        self._history_content('{"text": "silo"}')
+        self._cancelled_keyboard()
+        items = self.run_plugin('?m=5')
+        self.assertEqual(self.folders(items), ['Търсене'])
+
     def test_search_screen_offers_search(self):
         items = self.run_plugin('?url=%s&mode=5&name=x&iconimage=/x.png'
                                 % self.encoded)

@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.2` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
