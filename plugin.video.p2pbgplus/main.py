@@ -890,4 +890,6 @@ else:
     Blocked('Cannot open this item (mode=%s). Open Диагностика for the '
             'recorded request.' % mode)
 
-xbmcplugin.endOfDirectory(int(sys.argv[1]))
+# cacheToDisc=False: Kodi must never serve a saved copy of a live tracker
+# listing, otherwise a revisited category shows the previous content.
+xbmcplugin.endOfDirectory(int(sys.argv[1]), cacheToDisc=False)

@@ -103,6 +103,10 @@ class TestForkFidelity(unittest.TestCase):
             self.assertIn('id="{}"'.format(setting_id), settings_xml)
             self.assertIn("getSetting('{}')".format(setting_id), source)
 
+    def test_listings_are_never_served_from_disk_cache(self):
+        self.assertIn('endOfDirectory(int(sys.argv[1]), cacheToDisc=False)',
+                      _source())
+
     def test_no_dead_magnet_helper(self):
         self.assertNotIn('def find_info_hash', _source())
         self.assertNotIn('def torrent_url_to_magnet', _source())

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.3" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.4" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Browsing menu rebuilt from the tracker’s own category list (Movies section only: 4K/HD/SD/VHS/DVD/Pack/BG movies/BG series/TV/boxsets/cartoons/documentary/GSM); dead category IDs removed from “latest” too. The Меню entry is gone from listings (Back button suffices). A click on a category can no longer show a previous search: wrong content is never substituted, and truncated labels resolve by unique prefix.</news>
+        <news>Listings are no longer written to Kodi’s on-disk directory cache (cacheToDisc=False), so a revisited category always re-fetches instead of showing previously saved content.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>
