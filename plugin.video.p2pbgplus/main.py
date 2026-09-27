@@ -156,21 +156,23 @@ if not __addon__.getSetting('p2pbg_password'):
 usr = __addon__.getSetting('p2pbg_user')
 passwd = __addon__.getSetting('p2pbg_password')
 
+# Browsing menu: exactly the "Movies" optgroup of the tracker's own
+# Категория dropdown (p2pbg.com/1.html snapshot). IDs outside it are dead on
+# the current site and make the tracker answer with an unrelated listing.
 __categories__ = [
     {'cat_ids': '60', 'cat_name': u'Филми 4K'},
     {'cat_ids': '68', 'cat_name': u'Филми HD'},
     {'cat_ids': '67', 'cat_name': u'Филми SD'},
     {'cat_ids': '59', 'cat_name': u'Филми VHS'},
-    {'cat_ids': '11', 'cat_name': u'Филми DVD-R'},
+    {'cat_ids': '11', 'cat_name': u'Филми DVD'},
     {'cat_ids': '69', 'cat_name': u'Филми Pack'},
     {'cat_ids': '34', 'cat_name': u'Български Филми'},
     {'cat_ids': '24', 'cat_name': u'Български Сериали'},
-    {'cat_ids': '14;15', 'cat_name': u'Сериали'},
+    {'cat_ids': '14', 'cat_name': u'Сериали'},
+    {'cat_ids': '15', 'cat_name': u'Сериали Boxset'},
     {'cat_ids': '38', 'cat_name': u'Анимации'},
     {'cat_ids': '7', 'cat_name': u'Документални'},
-    {'cat_ids': '64', 'cat_name': u'Футбол'},
-    {'cat_ids': '5', 'cat_name': u'Формула 1'},
-    {'cat_ids': '57', 'cat_name': u'Формула 2'}
+    {'cat_ids': '35', 'cat_name': u'Филми GSM'},
 ]
 
 UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36'
@@ -185,8 +187,8 @@ baseurl = 'https://www.p2pbg.com'
 loginurl = '/login'
 subpage = baseurl + '/torrents/'
 
-# Categories for "Последно добавени" (video sets, sports, series).
-latest_categories = '1;5;7;11;14;15;16;17;18;24;34;35;38;58;59;60;51;57'
+# Categories for "Последно добавени": same Movies set as the menu.
+latest_categories = '7;11;14;15;24;34;35;38;59;60;67;68;69'
 
 
 def listing_url(categories, search='', bgaudio=False, show_xxx=False):
@@ -216,9 +218,6 @@ bgsubs_flags = ["subs.gif","torrent-flag-subs-in-torrent.png","torrent-flag-exte
 bgaudio_flags = ["bgaudio.gif","torrent-flag-bg-audio.png"]
 
 if xxx == True:
-    __categories__ += [
-        {'cat_ids': '13;48;53;54', 'cat_name': u'XXX'}
-    ]
     latest_categories += ';13;48;53;54'
 
 torrentsurl = listing_url(latest_categories, bgaudio=(bs != ''), show_xxx=xxx)
@@ -337,8 +336,6 @@ def INDEXPAGES(name, url):
 
     target_table = find_results_table(soup)
     Record('last_table', 'found' if target_table else 'NOT FOUND')
-
-    addDir('Меню', '', 9, '', __icon_folders__)
 
     counted = [0]
 
@@ -586,7 +583,7 @@ def resolve_label(label):
     """
     if not label:
         return False
-    label = label.strip()
+    label = label.strip().rstrip('/')
     if label == 'Меню':
         CATEGORIES()
         return True
@@ -598,8 +595,9 @@ def resolve_label(label):
         return True
     if label == 'Последно добавени':
         prefs = (bs != '', xxx)
-        INDEXPAGES(label, listing_url(latest_categories, bgaudio=prefs[0],
-                                      show_xxx=prefs[1]))
+        INDEXPAGES('Последно добавени',
+                   listing_url(latest_categories, bgaudio=prefs[0],
+                               show_xxx=prefs[1]))
         return True
     year = re.fullmatch(r'Филми от (\d{4}) година', label)
     if year:
@@ -610,6 +608,19 @@ def resolve_label(label):
         if cat['cat_name'] == label:
             INDEXPAGES(label, listing_url(cat['cat_ids'],
                                           bgaudio=(bs != ''), show_xxx=xxx))
+            return True
+    # The label may be cut off mid-word, so accept a unique prefix match
+    # ('Сериали' must not also match 'Сериали Boxset' - hence the exact
+    # pass above).
+    if len(label) >= 4:
+        candidates = [cat for cat in __categories__
+                      if cat['cat_name'].startswith(label)
+                      or label.startswith(cat['cat_name'])]
+        if len(candidates) == 1:
+            cat = candidates[0]
+            INDEXPAGES(cat['cat_name'],
+                       listing_url(cat['cat_ids'],
+                                   bgaudio=(bs != ''), show_xxx=xxx))
             return True
     return False
 
@@ -829,18 +840,16 @@ elif mode == None:
     elif url and '/torrents' in url:
         INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
                    url)
-    elif GetSetting('last_listing') and not is_root:
-        # An unresolvable click still shows the last working screen rather
-        # than an error, and never the menu as a nested folder.
-        INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
-                   GetSetting('last_listing'))
     elif is_root:
         CATEGORIES()
     else:
-        Log('unresolvable call: mode=None url=%s raw=%s' % (url, paramstring))
-        Record('last_error', 'unresolvable call: mode=None')
-        Blocked('Cannot open this item (mode=None). Open Диагностика for the '
-                'recorded request.')
+        # Report, do not substitute: showing the last viewed listing here is
+        # what made every category display the previous search results.
+        Log('unresolvable call: mode=None name=%s url=%s raw=%s'
+            % (name, url, paramstring))
+        Record('last_error', 'unresolvable call: mode=None name=%s' % name)
+        Blocked('Cannot open "%s". Try it again from the menu.'
+                % (name or 'this item'))
 
 elif mode == 9:
     # Explicit "Меню" entry: the menu is only ever rendered on request.

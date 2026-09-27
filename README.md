@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.2` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.3` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -216,8 +216,12 @@ Added on top of the fork:
 Behaviour inherited from the reference:
 
 - Root menu: search (with history screen), latest additions, movies-by-year,
-  per-category folders (4K/HD/SD, BG movies/series, TV series, animation,
-  documentary, sports, optional XXX), diagnostics. The root menu is rendered
+  only the tracker's **Movies** categories (4K/HD/SD/VHS/DVD/Pack, BG
+  movies/series, TV shows, TV boxsets, cartoons, documentary, GSM),
+  diagnostics. Listings have no menu entry; the remote Back button is enough.
+- A category click can never render a previous search: when a request cannot
+  be resolved, the add-on reports the error instead of substituting content
+  (truncated labels resolve by unique prefix). The root menu is rendered
   with content type `files`, so it always shows folder icons.
 - Opening the add-on reopens the **last used category** instead of the root
   menu (setting `start_at_last`, on by default); every listing has a `Меню`

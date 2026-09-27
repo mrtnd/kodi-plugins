@@ -174,7 +174,7 @@ class TestNavigation(unittest.TestCase):
         items = self.run_plugin('?url=%s&mode=1&name=Филми%%20HD&iconimage=/x.png/'
                                 % self.encoded)
         self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
-        self.assertEqual(self.folders(items), ['Меню'])
+        self.assertEqual(self.folders(items), [])
 
     def test_menu_entries_are_folders_only(self):
         items = self.run_plugin('?url=&mode=9&name=Меню&iconimage=/x.png')
@@ -219,7 +219,7 @@ class TestNavigation(unittest.TestCase):
                       '?url=not-a-url&mode=1',
                       '?mode=1'):
             items = self.run_plugin(query)
-            # at most the 'Меню' escape hatch, never the main menu entries
+            # no folders at all here, and never the main menu entries
             self.assertEqual([label for label in self.folders(items)
                               if label != 'Меню'], [],
                              'menu rendered for ' + query)
@@ -257,7 +257,7 @@ class TestNavigation(unittest.TestCase):
     def test_category_mode_with_lost_url_resolves_by_name(self):
         items = self.run_plugin('?url=&mode=1&name=%D0%A1%D0%B5%D1%80%D0%B8%D0%B0%D0%BB%D0%B8')
         self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
-        self.assertIn('category=14;15', SETTINGS['last_listing'])
+        self.assertIn('category=14', SETTINGS['last_listing'])
 
     def test_menu_labels_resolve(self):
         items = self.run_plugin('?name=%D0%9C%D0%B5%D0%BD%D1%8E')
@@ -266,10 +266,24 @@ class TestNavigation(unittest.TestCase):
         self.assertEqual(self.folders(items), ['Търсене'])
         self.run_plugin('?name=%D0%94%D0%B8%D0%B0%D0%B3%D0%BD%D0%BE%D1%81%D1%82%D0%B8%D0%BA%D0%B0')
 
-    def test_last_listing_is_the_ladder_down(self):
-        self.run_plugin('?url=%s&mode=1&name=x&iconimage=/x.png' % self.encoded)
+    def test_stale_search_is_never_substituted(self):
+        # search first, so a last_listing exists
+        self.run_plugin('?url=%s&mode=4&name=x&iconimage=/x.png' % self.encoded)
+        self.assertEqual(SETTINGS['last_items'], '1')
+        # an unresolvable click reports instead of showing the old search
         items = self.run_plugin('?garbage')
+        self.assertEqual(items, [])
+        self.assertIn('last_error', SETTINGS)
+
+    def test_truncated_label_still_resolves(self):
+        items = self.run_plugin('?name=%D0%A4%D0%B8%D0%BB%D0%BC%D0%B8+H')
         self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertIn('category=68', SETTINGS['last_listing'])
+
+    def test_ambiguous_label_does_not_guess(self):
+        items = self.run_plugin('?name=%D0%A4%D0%B8%D0%BB%D0%BC%D0%B8')
+        self.assertEqual(items, [])
+        self.assertIn('last_error', SETTINGS)
 
     def test_nothing_recoverable_reports_instead_of_menu(self):
         items = self.run_plugin('?garbage')
