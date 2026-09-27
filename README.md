@@ -7,23 +7,30 @@ Current plugins:
 
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
-| FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
+| FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
 | P2PBG+ | `plugin.video.p2pbgplus` | `0.6.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
+
+**Maintenance status:** `plugin.video.p2pbgplus` is the only actively
+maintained add-on. `plugin.video.fmovies` is **deprecated**: its upstream
+site is gone/broken, it receives no fixes, no version bumps and no releases,
+and changes to it are out of scope. Do not work on it, and ignore it in
+reviews, test runs and release prep.
 
 ---
 
 ## 1. Install (end users)
 
 1. Go to the [**Releases page**](https://github.com/mrtnd/kodi-plugins/releases),
-    download the zip you need, e.g. `plugin.video.fmovies-1.2.6.zip`.
+    download the zip you need, e.g. `plugin.video.p2pbgplus-0.6.1.zip`
+    (the FMovies zips are kept for existing installs only).
 2. Copy the zip to your TV (USB, `Send Files to TV` app, or cloud drive).
 3. In Kodi: **Settings → System → Add-ons → Unknown sources → ON**.
 4. **Add-ons → 📦 (top-left) → Install from zip file** → select the zip.
 5. Open **Add-ons → Video add-ons** → your add-on.
 
-### FMovies only
+### FMovies only (deprecated add-on)
 
 6. Enable HLS playback: **Settings → Add-ons → My add-ons →
    VideoPlayer InputStream → InputStream Adaptive → Enable**.
@@ -54,7 +61,7 @@ Download the newer `plugin.video.<name>-x.y.z.zip` from Releases and
 
 ```text
 kodi-plugins/
-├── plugin.video.fmovies/      # HLS streaming add-on
+├── plugin.video.fmovies/      # DEPRECATED, unmaintained (HLS streaming add-on)
 │   ├── addon.xml              # <-- version source of truth
 │   ├── main.py
 │   ├── icon.png / fanart.jpg
@@ -88,15 +95,16 @@ automatically — no workflow changes needed.
 
 ## 3. Versioning & automated releases (how it works)
 
-**Source of truth:** `plugin.video.fmovies/addon.xml`:
+**Source of truth:** the add-on's own `addon.xml` (e.g.
+`plugin.video.p2pbgplus/addon.xml`):
 
 ```xml
-<addon id="plugin.video.fmovies" version="1.2.1" ...>
+<addon id="plugin.video.p2pbgplus" version="0.6.1" ...>
 ```
 
-**Tag format:** `<addon-id>-v<version>`, e.g. `plugin.video.fmovies-v1.2.1`.
+**Tag format:** `<addon-id>-v<version>`, e.g. `plugin.video.p2pbgplus-v0.6.1`.
 **Asset format:** `<addon-id>-<version>.zip`, e.g.
-`plugin.video.fmovies-1.2.1.zip` (+ `.sha256` checksum).
+`plugin.video.p2pbgplus-0.6.1.zip` (+ `.sha256` checksum).
 
 Pipeline (`.github/workflows/release.yml`, runs on every `push` to
 `main`/`master`, on PRs, and manually via **Actions → Run workflow**):
@@ -125,18 +133,18 @@ Consequences:
 
 ```bash
 # 1. bump version, e.g. 1.2.1 -> 1.2.2
-#    edit plugin.video.fmovies/addon.xml
+#    edit plugin.video.p2pbgplus/addon.xml
 
 # 2. sanity check locally
 python3 scripts/build_zip.py --out dist
 ls -lh dist/
 
 # 3. commit + push
-git add plugin.video.fmovies/addon.xml
-git commit -m "plugin.video.fmovies: bump to 1.2.2"
+git add plugin.video.p2pbgplus/addon.xml
+git commit -m "plugin.video.p2pbgplus: bump to 0.6.2"
 git push origin main
 
-# 4. watch Actions → new Release plugin.video.fmovies-v1.2.2 appears
+# 4. watch Actions → new Release plugin.video.p2pbgplus-v0.6.2 appears
 ```
 
 ---
@@ -144,21 +152,25 @@ git push origin main
 ## 4. Local development
 
 ```bash
-# build exactly like CI (output in dist/, ignored by git)
-python3 scripts/build_zip.py
-python3 scripts/build_zip.py --addon plugin.video.fmovies --out dist
+# build (output in dist/, ignored by git)
 python3 scripts/build_zip.py --addon plugin.video.p2pbgplus --out dist
 
 # run tests (needs pytest)
 pip install pytest requests beautifulsoup4
-python3 -m pytest plugin.video.fmovies/tests -v
 python3 -m pytest plugin.video.p2pbgplus/tests -v
 ```
+
+`plugin.video.fmovies` is deprecated: no builds, no test runs, no releases.
 
 Manual Kodi install from a local build: use the `dist/*.zip` with
 **Install from zip** as in section 1.
 
-### FMovies add-on notes
+### FMovies add-on notes (DEPRECATED)
+
+> **Deprecated / unmaintained.** Upstream playback no longer works, the add-on
+> gets no further releases, and it is excluded from active development. Kept in
+> the repo so existing installations keep working and for historical reference.
+> Known-good state at the time of deprecation:
 
 - Root menu: Search (with history), Home Suggestions, Movies, TV-Series,
   Top IMDb, Genres, Countries.
@@ -220,9 +232,9 @@ Behaviour inherited from the reference:
 
 | Symptom | Fix |
 |---|---|
-| `Error loading catalog` | Check internet; if `fmoviess.org` blocked, change domain in add-on settings |
-| `No stream / resolve failed` | Try another server in settings, or another episode/link |
-| Choppy HLS | Enable **InputStream Adaptive** (see §1 step 6) |
+| `Error loading catalog` (FMovies, deprecated) | Upstream no longer works; the add-on is unmaintained |
+| `No stream / resolve failed` (FMovies, deprecated) | Upstream no longer works; the add-on is unmaintained |
+| Choppy HLS (FMovies, deprecated) | Enable **InputStream Adaptive** (see §1 step 6) |
 | P2PBG+ `Tracker login failed` | Re-enter username/password in Configure; check tracker reachability/VPN |
 | P2PBG+ playback blocked, wrong country | Connect VPN to the configured country and retry (gate is fail-closed) |
 | P2PBG+ `Install the Elementum add-on first` | Install Elementum (Android build) and open it once |
