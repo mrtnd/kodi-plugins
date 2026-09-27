@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.6.1" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.0" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Fixes browsing and search on the current site: listing/search URLs now mirror the tracker's own search form (fake*remembered, search, category, active, bgaudio, hidexxx=1/0), the results table columns are read at their real offsets (size/seeders/leechers), a malformed row can no longer abort a listing, and the search dialog uses xbmcgui.Keyboard. Playback hand-off unchanged.</news>
+        <news>Navigation fix: a click that arrives without its mode parameter now shows the requested listing instead of re-rendering the main menu; the plugin opens the last used category instead of the redundant main menu (setting start_at_last, with a Меню entry in every listing); the root menu is explicitly content-type files so it always renders as folders; plugin queries are parsed with parse_qsl; Diagnostics now shows the last call, listing, table and item count. Playback and browsing unchanged.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

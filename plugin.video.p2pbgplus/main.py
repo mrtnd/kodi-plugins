@@ -118,6 +118,11 @@ def DIAGNOSTICS():
                                                     'OK' if ok else 'BLOCKED'),
         'User: ' + (__addon__.getSetting('p2pbg_user') or '(not set)'),
         'Profile: ' + __profile__,
+        'Last call: ' + (__addon__.getSetting('last_call') or 'none'),
+        'Last listing: ' + ((__addon__.getSetting('last_category') or '?') + ' -> '
+                            + (GetSetting('last_listing') or 'none')),
+        'Table: ' + (__addon__.getSetting('last_table') or '?')
+        + ', items: ' + (__addon__.getSetting('last_items') or '?'),
         'Last play: ' + (__addon__.getSetting('last_play') or 'none'),
         'Last error: ' + (__addon__.getSetting('last_error') or 'none'),
     ]
@@ -238,6 +243,11 @@ r = s.post(baseurl + loginurl, data=values, headers=headers_new)
 
 
 def CATEGORIES():
+    # 'files' keeps the menu rendering as folders; without this Kodi can
+    # inherit 'movies' from the previous directory and draw every menu entry
+    # as a video file.
+    xbmcplugin.setContent(int(sys.argv[1]), 'files')
+
     FilmiYear = int(datetime.now().date().strftime("%Y"))
 
     addDir(u'Търсене', torrentsurl, 5, '', __icon_search__)
@@ -307,6 +317,11 @@ def find_results_table(soup):
 def INDEXPAGES(name, url):
     xbmcplugin.setContent(int(sys.argv[1]), 'movies')
 
+    # Remember where we were so the add-on can reopen it instead of the root
+    # menu, and record it for Diagnostics.
+    Record('last_listing', url)
+    Record('last_category', name or 'Последно добавени')
+
     r = s.get(url, headers=headers_new)
 
     data = r.text
@@ -314,6 +329,11 @@ def INDEXPAGES(name, url):
     soup = BeautifulSoup(data, 'html.parser')
 
     target_table = find_results_table(soup)
+    Record('last_table', 'found' if target_table else 'NOT FOUND')
+
+    addDir('Меню', '', 9, '', __icon_folders__)
+
+    counted = [0]
 
     if target_table:
         rows = target_table.find_all("tr")
@@ -488,10 +508,13 @@ def INDEXPAGES(name, url):
                 #magnet = torrent_url_to_magnet(torrent_data, name=title)
 
                 addLink(title, torrent_url, 2, desk, image_url, imdb_id)
+                counted[0] += 1
 
             except Exception as exc:
                 Log('row skipped: %r' % (exc,))
                 continue
+
+        Record('last_items', str(counted[0]))
 
         # Следваща страница
         next_page = None
@@ -503,7 +526,8 @@ def INDEXPAGES(name, url):
         if next_page:
             addDir('[COLOR CC00FF00][B]Следваща страница>>[/B][/COLOR]', next_page, 1, '', '')
     else:
-        pass
+        Record('last_items', '0')
+        Log('results table not found for %s' % url)
 
 
 # Екран за търсене с история
@@ -613,22 +637,25 @@ def PLAY(torrent_url, title=''):
 
 
 def get_params():
-    param = []
-    paramstring = sys.argv[2]
-    if len(paramstring) >= 2:
-        params = sys.argv[2]
-        cleanedparams = params.replace('?', '')
-        if (params[len(params) - 1] == '/'):
-            params = params[0:len(params) - 2]
-        pairsofparams = cleanedparams.split('&')
-        param = {}
-        for i in range(len(pairsofparams)):
-            splitparams = {}
-            splitparams = pairsofparams[i].split('=')
-            if (len(splitparams)) == 2:
-                param[splitparams[0]] = splitparams[1]
+    """Parse the plugin query.
 
-    return param
+    parse_qsl (not a hand-rolled split) so a trailing slash, a blank value
+    such as search= or any stray character cannot drop mode/url and land
+    the user back in the root menu.
+    """
+    paramstring = sys.argv[2] if len(sys.argv) > 2 else ''
+    if not paramstring or len(paramstring) < 2:
+        return {}
+    return dict(urllib.parse.parse_qsl(paramstring.lstrip('?'),
+                                       keep_blank_values=True))
+
+
+def GetSetting(setting, default=''):
+    try:
+        value = __addon__.getSetting(setting)
+    except Exception:
+        return default
+    return value if value != '' else default
 
 
 def addDir(name, url, mode, plot, iconimage):
@@ -695,7 +722,24 @@ try:
 except:
     pass
 
-if mode == None or url == None or len(url) < 1:
+# What did Kodi actually hand us? Shown by Diagnostics, because a mangled
+# query is the difference between a listing and the root menu reappearing.
+Record('last_call', 'mode=%s url=%s raw=%s'
+       % (mode, (url or '')[:120], (sys.argv[2] if len(sys.argv) > 2 else '')[:200]))
+
+if mode == None and url and '/torrents' in url:
+    # Kodi can hand the query back without the mode parameter (URL
+    # re-encoding by the skin/history). A listing URL still means "show this
+    # listing" - falling through to the root menu here is what made every
+    # category click land back on the main menu.
+    INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'), url)
+
+elif mode == None and GetSetting('start_at_last') == 'true' and GetSetting('last_listing'):
+    # Skip the redundant root menu: reopen the last visited listing.
+    INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
+               GetSetting('last_listing'))
+
+elif mode == None or url == None or len(url) < 1:
     print("")
     CATEGORIES()
 
@@ -711,6 +755,9 @@ elif mode == 6:
 
 elif mode == 7:
     DIAGNOSTICS()
+
+elif mode == 9:
+    CATEGORIES()
 
 elif mode == 1:
     print("" + url)

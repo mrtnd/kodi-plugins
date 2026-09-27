@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.6.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -196,9 +196,14 @@ Added on top of the fork:
 - **Fail-closed VPN country gate** (`resources/lib/vpngate.py`) checked before
   every download; wrong country *or* a failed check blocks with a dialog.
 - **Diagnostics**: a `Диагностика` entry in the root menu shows Elementum
-  presence, the VPN country/state, the profile path, the last URI handed to
-  Elementum and the last error — so failures can be read on the TV instead of
-  guessed at.
+  presence, the VPN country/state, the profile path, the last plugin call
+  (raw query + parsed mode/url), the last listing URL with the results-table
+  state and item count, the last URI handed to Elementum and the last error —
+  so failures can be read on the TV instead of guessed at.
+- **Routing**: plugin queries are parsed with `parse_qsl` (blank values and
+  the trailing slash Kodi appends included), and a click that arrives without
+  its `mode` parameter is treated as a listing request rather than a request
+  for the root menu.
 - Setting ids differ from the reference so existing installations keep their
   credentials: `p2pbg_user`, `p2pbg_password`, `prefer_bgaudio`, `show_xxx`,
   `vpn_country`, plus hidden `search_history`, `last_error`, `last_play`.
@@ -207,7 +212,11 @@ Behaviour inherited from the reference:
 
 - Root menu: search (with history screen), latest additions, movies-by-year,
   per-category folders (4K/HD/SD, BG movies/series, TV series, animation,
-  documentary, sports, optional XXX).
+  documentary, sports, optional XXX), diagnostics. The root menu is rendered
+  with content type `files`, so it always shows folder icons.
+- Opening the add-on reopens the **last used category** instead of the root
+  menu (setting `start_at_last`, on by default); every listing has a `Меню`
+  entry at the top to get back to it.
 - Listing and search URLs mirror the tracker's own search form, because it
   only honours the filters when the whole query is present:
   `/torrents?fakeusernameremembered=&fakepasswordremembered=&search=<q>&category=<ids>&active=1[&bgaudio=1]&hidexxx=1`
