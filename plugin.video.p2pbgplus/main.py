@@ -596,7 +596,7 @@ def INDEXPAGES(name, url):
 
 # Екран за търсене с история
 def SEARCHSCREEN():
-    add_menu_item(u'Търсене', {'m': '5'}, __icon_search__)
+    add_menu_item(u'Търсене', {'m': '10'}, __icon_search__)
 
     history = load_history()
     for item in history:
@@ -694,6 +694,8 @@ def run_compact(params, label=''):
     elif mode == '4':
         SEARCH(params.get('q', ''))
     elif mode == '5':
+        SEARCHSCREEN()
+    elif mode == '10':
         SEARCH()
     elif mode == '6':
         CLEARHISTORY()
@@ -926,7 +928,7 @@ try:
         # Next-page link: the only compact request carrying a full URL.
         INDEXPAGES(name or compact.get('n', '') or 'Категория', compact['u'])
 
-    elif compact.get('m') in ('1', '4', '5', '6', '7', '9'):
+    elif compact.get('m') in ('1', '4', '5', '6', '7', '9', '10'):
         run_compact(compact, name or compact.get('n', ''))
 
     elif compact:

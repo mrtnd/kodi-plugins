@@ -216,15 +216,27 @@ class TestNavigation(unittest.TestCase):
         items = self.run_plugin('?m=5')
         self.assertEqual(self.folders(items), ['Търсене'])
 
+    def test_menu_search_opens_history_first(self):
+        self._history_content('[{"text": "dark matter"}]')
+        items = self.run_plugin('?m=5')
+        self.assertEqual(self.folders(items),
+                         ['Търсене', 'dark matter', 'Изчисти историята'])
+
     def test_search_input_runs_the_search(self):
         import sys as _sys
         dialog = _sys.modules['xbmcgui'].Dialog()
         dialog.answer = 'dark matter'
         self.addCleanup(setattr, dialog, 'answer', '')
-        items = self.run_plugin('?m=5')
+        items = self.run_plugin('?m=10')
         self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
         self.assertIn('search=dark+matter', SETTINGS['last_listing'])
         self.assertIn('category=0', SETTINGS['last_listing'])
+
+    def test_history_entry_reruns_its_search(self):
+        self._history_content('[{"text": "dark matter"}]')
+        items = self.run_plugin('?m=4&q=dark+matter')
+        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertIn('search=dark+matter', SETTINGS['last_listing'])
 
     def test_search_screen_offers_search(self):
         items = self.run_plugin('?url=%s&mode=5&name=x&iconimage=/x.png'
