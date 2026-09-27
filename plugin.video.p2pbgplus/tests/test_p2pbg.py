@@ -11,6 +11,7 @@ offline:
 """
 import ast
 import os
+import re
 import sys
 import unittest
 from unittest.mock import MagicMock
@@ -60,9 +61,11 @@ def _load(*names):
     main.py logs into the tracker at import time, so the offline-checkable
     helpers are lifted out of the AST instead.
     """
-    from bs4 import BeautifulSoup  # noqa: F401  (used by the helpers)
+    import urllib
     import urllib.parse
-    namespace = {'baseurl': 'https://www.p2pbg.com', 'urllib': urllib.parse}
+    from bs4 import BeautifulSoup  # noqa: F401  (used by the helpers)
+    namespace = {'baseurl': 'https://www.p2pbg.com', 'urllib': urllib,
+                 'urllib.parse': urllib.parse, 're': re}
     for name in names:
         node = _function(name)
         exec(compile(ast.Module([node], []), 'main.py', 'exec'), namespace)
@@ -162,6 +165,49 @@ class TestListingUrls(unittest.TestCase):
         for value, expected in (('21', 21), ('---', 0), ('', 0), ('  ', 0),
                                 (None, 0), ('1 234', 1234), ('1,024', 1024)):
             self.assertEqual(self.ns['to_int'](value), expected)
+
+
+class TestQueryRecovery(unittest.TestCase):
+    """A listing address must be recoverable from a mangled plugin query."""
+
+    def setUp(self):
+        self.ns = _load('recover_listing_url')
+        self.listing = ('https://www.p2pbg.com/torrents?'
+                        'fakeusernameremembered=&fakepasswordremembered=&search=&'
+                        'category=68&active=1&hidexxx=1')
+
+    def _enc(self, url):
+        for char, code in ((':', '%3A'), ('/', '%2F'), ('?', '%3F'),
+                           ('&', '%26'), ('=', '%3D'), (' ', '%20')):
+            url = url.replace(char, code)
+        return url
+
+    def test_normal_query(self):
+        self.assertEqual(
+            self.ns['recover_listing_url']('?url=' + self._enc(self.listing)),
+            self.listing)
+
+    def test_mode_lost(self):
+        self.assertEqual(
+            self.ns['recover_listing_url'](
+                '?url=%s&mode=1&name=x' % self._enc(self.listing)),
+            self.listing)
+
+    def test_double_encoded_query(self):
+        mangled = self._enc(self.listing).replace('%3D', '%253D') \
+            .replace('%3F', '%253F')
+        self.assertEqual(
+            self.ns['recover_listing_url']('?url=' + mangled), self.listing)
+
+    def test_query_with_spaces_kept(self):
+        listing = self.listing.replace('search=', 'search=silo s03')
+        self.assertEqual(
+            self.ns['recover_listing_url']('?url=' + self._enc(listing)),
+            listing)
+
+    def test_nothing_to_recover(self):
+        for query in ('', '?mode=1&name=x', '?url=not-a-url&mode=1'):
+            self.assertEqual(self.ns['recover_listing_url'](query), '')
 
 
 class TestRowParsing(unittest.TestCase):

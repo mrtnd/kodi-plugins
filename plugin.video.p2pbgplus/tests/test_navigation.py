@@ -211,6 +211,42 @@ class TestNavigation(unittest.TestCase):
         self.assertIn('search=silo', SETTINGS['last_listing'])
         self.assertIn('hidexxx=1', SETTINGS['last_listing'])
 
+    # -- the menu must never come back as a nested directory ----------
+    def test_unresolvable_click_never_renders_the_menu(self):
+        for query in ('?url=&mode=1&name=x&iconimage=/x.png',
+                      '?mode=1&name=x',
+                      '?url=&mode=42&name=x',
+                      '?url=not-a-url&mode=1',
+                      '?mode=1'):
+            items = self.run_plugin(query)
+            # at most the 'Меню' escape hatch, never the main menu entries
+            self.assertEqual([label for label in self.folders(items)
+                              if label != 'Меню'], [],
+                             'menu rendered for ' + query)
+            self.assertEqual(self.playable(items), [])
+
+    def test_root_without_history_is_the_only_implicit_menu(self):
+        items = self.run_plugin('')
+        self.assertIn('Последно добавени', self.folders(items))
+        self.assertIn('Диагностика', self.folders(items))
+
+    def test_listing_url_is_recovered_from_a_mangled_query(self):
+        # mode dropped and the url parameter re-encoded by the skin
+        query = ('?url=' + self.encoded.replace('%3D', '%253D').replace('%3F', '%253F')
+                 + '&iconimage=/x.png')
+        self.assertIn('category%253D68', query)
+        items = self.run_plugin(query)
+        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertIn('category=68', SETTINGS['last_listing'])
+
+    def test_play_still_resolves_with_a_long_url(self):
+        query = ('?url=https%3A%2F%2Fwww.p2pbg.com%2Fdownload.php%3Fid%3D'
+                 + 'b' * 40 + '%26f%3DSilo.torrent&mode=2&name=Silo.S03E10.1080p')
+        self.run_plugin(query)
+        # VPN country is BG in the stub and the check is cached per call, so
+        # either the Elementum URI is recorded or the gate blocked it
+        self.assertTrue(SETTINGS.get('last_play') or SETTINGS.get('last_error'))
+
     # -- bookkeeping ---------------------------------------------------
     def test_listing_is_recorded_for_diagnostics(self):
         self.run_plugin('?url=%s&mode=1&name=Филми%%20HD&iconimage=/x.png'

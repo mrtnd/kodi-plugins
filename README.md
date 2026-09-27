@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -201,9 +201,14 @@ Added on top of the fork:
   state and item count, the last URI handed to Elementum and the last error —
   so failures can be read on the TV instead of guessed at.
 - **Routing**: plugin queries are parsed with `parse_qsl` (blank values and
-  the trailing slash Kodi appends included), and a click that arrives without
-  its `mode` parameter is treated as a listing request rather than a request
-  for the root menu.
+  the trailing slash Kodi appends included). The main menu is rendered **only**
+  at the add-on root or via the `Меню` entry — never as a side effect of a click
+  that could not be resolved, which is what made every selection re-render the
+  menu as a nested folder. A listing address embedded in a mangled query
+  (mode lost, URL re-encoded, double-encoded) is recovered and shown; if
+  nothing can be resolved, the add-on reports the error instead of guessing.
+  A failed listing request is reported too, so Kodi never keeps the previous
+  directory on screen.
 - Setting ids differ from the reference so existing installations keep their
   credentials: `p2pbg_user`, `p2pbg_password`, `prefer_bgaudio`, `show_xxx`,
   `vpn_country`, plus hidden `search_history`, `last_error`, `last_play`.

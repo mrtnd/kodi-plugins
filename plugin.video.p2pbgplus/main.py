@@ -322,9 +322,16 @@ def INDEXPAGES(name, url):
     Record('last_listing', url)
     Record('last_category', name or 'Последно добавени')
 
-    r = s.get(url, headers=headers_new)
-
-    data = r.text
+    try:
+        r = s.get(url, headers=headers_new)
+        data = r.text
+    except Exception as exc:
+        # Kodi keeps the previous directory on screen when a plugin dies
+        # before endOfDirectory, which looks like a stuck/duplicated menu.
+        Record('last_items', '0')
+        Log('listing request failed for %s: %r' % (url, exc))
+        Blocked('Failed to load the listing.\n\n%s' % exc)
+        return
 
     soup = BeautifulSoup(data, 'html.parser')
 
@@ -636,6 +643,40 @@ def PLAY(torrent_url, title=''):
         xbmc.executebuiltin("Notification('Грешка','Видеото липсва на сървъра!')")
 
 
+def recover_listing_url(paramstring):
+    """Dig a listing URL out of a (possibly mangled) plugin query.
+
+    The listing address is part of the item URL, so it survives even when the
+    mode/url parameters do not. Understands the plain and the (double)
+    percent-encoded form and stops at the plugin's own parameters
+    (mode/name/iconimage), so a listing query is never truncated.
+    """
+    if not paramstring:
+        return ''
+    flat = urllib.parse.unquote_plus(paramstring)
+    # a query that was encoded twice keeps '?' and '=' percent-encoded
+    flat = flat.replace('%3F', '?').replace('%3f', '?')
+    head = flat.find('https://')
+    if head < 0:
+        return ''
+    marker = '/torrents?'
+    found = flat.find(marker, head)
+    if found < 0:
+        return ''
+    tail = flat[found + len(marker):]
+    stop = len(tail)
+    for name in ('&mode=', '&name=', '&iconimage=', '&groupid=', '&count=',
+                 '&ytpass='):
+        pos = tail.lower().find(name)
+        if pos >= 0:
+            stop = min(stop, pos)
+    url = urllib.parse.unquote_plus(
+        flat[head:found + len(marker)] + tail[:stop])
+    if 'category=' not in url and 'search=' not in url:
+        return ''
+    return url
+
+
 def get_params():
     """Parse the plugin query.
 
@@ -727,28 +768,41 @@ except:
 Record('last_call', 'mode=%s url=%s raw=%s'
        % (mode, (url or '')[:120], (sys.argv[2] if len(sys.argv) > 2 else '')[:200]))
 
-if mode == None and url and '/torrents' in url:
-    # Kodi can hand the query back without the mode parameter (URL
-    # re-encoding by the skin/history). A listing URL still means "show this
-    # listing" - falling through to the root menu here is what made every
-    # category click land back on the main menu.
-    INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'), url)
+paramstring = sys.argv[2] if len(sys.argv) > 2 else ''
+is_root = not paramstring or len(paramstring) < 2
+recovered = recover_listing_url(paramstring)
 
-elif mode == None and GetSetting('start_at_last') == 'true' and GetSetting('last_listing'):
-    # Skip the redundant root menu: reopen the last visited listing.
-    INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
-               GetSetting('last_listing'))
+if mode == None and is_root:
+    # The real add-on root: reopen the last listing, or show the menu once.
+    if GetSetting('start_at_last') == 'true' and GetSetting('last_listing'):
+        INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
+                   GetSetting('last_listing'))
+    else:
+        print("")
+        CATEGORIES()
 
-elif mode == None or url == None or len(url) < 1:
-    print("")
+elif mode == 9:
+    # Explicit "Меню" entry: the menu is only ever rendered on request, never
+    # as a side effect of a click that could not be resolved.
     CATEGORIES()
 
-elif mode == 5:
-    SEARCHSCREEN(url)
+elif mode == 1 or mode == 4 or mode == 5:
+    if not url and recovered:
+        url = recovered
+    if not url:
+        Blocked('Cannot open this item: no listing address in the request.')
+    elif mode == 5:
+        SEARCHSCREEN(url)
+    elif mode == 4:
+        print("" + url)
+        SEARCH(url)
+    else:
+        print("" + url)
+        INDEXPAGES(name, url)
 
-elif mode == 4:
+elif mode == 2:
     print("" + url)
-    SEARCH(url)
+    PLAY(url, name or '')
 
 elif mode == 6:
     CLEARHISTORY()
@@ -756,15 +810,17 @@ elif mode == 6:
 elif mode == 7:
     DIAGNOSTICS()
 
-elif mode == 9:
-    CATEGORIES()
+elif recovered:
+    # A click whose mode was lost but whose listing survived: show it.
+    INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
+               recovered)
 
-elif mode == 1:
-    print("" + url)
-    INDEXPAGES(name, url)
-
-elif mode == 2:
-    print("" + url)
-    PLAY(url, name or '')
+else:
+    # Never fall back to the menu here: that is what made every selection
+    # re-render the main menu as a nested folder.
+    Log('unresolvable call: mode=%s url=%s raw=%s' % (mode, url, paramstring))
+    Blocked('Cannot open this item (mode=%s).' % mode)
+    if not is_root:
+        Record('last_error', 'unresolvable call: mode=%s' % mode)
 
 xbmcplugin.endOfDirectory(int(sys.argv[1]))
