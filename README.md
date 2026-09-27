@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.7.4` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -215,10 +215,14 @@ Added on top of the fork:
 
 Behaviour inherited from the reference:
 
-- Root menu: search (with history screen), latest additions, movies-by-year,
-  only the tracker's **Movies** categories (4K/HD/SD/VHS/DVD/Pack, BG
-  movies/series, TV shows, TV boxsets, cartoons, documentary, GSM),
-  diagnostics. Listings have no menu entry; the remote Back button is enough.
+- Root menu (rebuilt): search with history (over all categories,
+  `category=0`, spaces plus-encoded), Movies HD (`category=68`), Movies 4K
+  (`category=60`), TV shows (`category=14`), TV boxsets (`category=15`), all
+  movies/shows/boxsets via the bare `?category=...` URL, diagnostics.
+  Listings have no menu entry; the remote Back button is enough.
+- Menu items use compact requests (`m`/`c`/`q` keys) instead of embedding the
+  whole listing URL, so a click cannot lose its address inside Kodi; any
+  failure shows the recorded request on screen.
 - A category click can never render a previous search: when a request cannot
   be resolved, the add-on reports the error instead of substituting content
   (truncated labels resolve by unique prefix). The root menu is rendered

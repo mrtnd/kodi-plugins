@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.4" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.8.0" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Listings are no longer written to Kodi’s on-disk directory cache (cacheToDisc=False), so a revisited category always re-fetches instead of showing previously saved content.</news>
+        <news>Menu rebuilt from scratch: search with history (all categories, plus-encoded), Movies HD, Movies 4K, TV shows, TV boxsets, and the bare all-movies URL. Menu items use compact requests that survive Kodi, and any failure now shows the recorded request on screen.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

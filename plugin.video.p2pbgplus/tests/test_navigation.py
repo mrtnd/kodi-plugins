@@ -179,8 +179,10 @@ class TestNavigation(unittest.TestCase):
     def test_menu_entries_are_folders_only(self):
         items = self.run_plugin('?url=&mode=9&name=Меню&iconimage=/x.png')
         self.assertEqual(self.playable(items), [])
-        self.assertIn('Последно добавени', self.folders(items))
-        self.assertIn('Диагностика', self.folders(items))
+        self.assertEqual(self.folders(items),
+                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
+                          'Сериали Boxset', 'Всички филми и сериали',
+                          'Диагностика'])
 
     def test_open_without_query_reopens_last_listing(self):
         self.run_plugin('?url=%s&mode=1&name=x&iconimage=/x.png' % self.encoded)
@@ -189,13 +191,16 @@ class TestNavigation(unittest.TestCase):
 
     def test_open_without_query_without_history_shows_menu(self):
         items = self.run_plugin('')
-        self.assertIn('Последно добавени', self.folders(items))
+        self.assertEqual(self.folders(items),
+                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
+                          'Сериали Boxset', 'Всички филми и сериали',
+                          'Диагностика'])
 
     def test_menu_used_when_start_at_last_disabled(self):
         SETTINGS['start_at_last'] = 'false'
         self.run_plugin('?url=%s&mode=1&name=x&iconimage=/x.png' % self.encoded)
         items = self.run_plugin('')
-        self.assertIn('Последно добавени', self.folders(items))
+        self.assertIn('Всички филми и сериали', self.folders(items))
 
     # -- search --------------------------------------------------------
     def test_search_screen_offers_search(self):
@@ -203,13 +208,27 @@ class TestNavigation(unittest.TestCase):
                                 % self.encoded)
         self.assertEqual(self.folders(items), ['Търсене'])
 
-    def test_search_keeps_every_filter(self):
-        items = self.run_plugin('?url=%s&mode=4&name=x&iconimage=/x.png'
-                                % self.encoded)
+    def test_search_runs_over_all_categories(self):
+        items = self.run_plugin('?m=4&q=silo')
         self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
-        self.assertIn('category=68', SETTINGS['last_listing'])
+        self.assertIn('category=0', SETTINGS['last_listing'])
         self.assertIn('search=silo', SETTINGS['last_listing'])
         self.assertIn('hidexxx=1', SETTINGS['last_listing'])
+
+    def test_search_with_spaces_is_plus_encoded(self):
+        items = self.run_plugin('?m=4&q=dark+matter')
+        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertIn('search=dark+matter', SETTINGS['last_listing'])
+        self.assertIn('category=0', SETTINGS['last_listing'])
+
+    def test_compact_category_urls(self):
+        for cats, bare in (('68', ''), ('60', ''),
+                           ('67;7;11;14;15;68;24;35;59;60;69', '&bare=1')):
+            query = '?m=1&c=%s%s' % (cats, bare)
+            items = self.run_plugin(query)
+            self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'],
+                             query)
+            self.assertIn('category=' + cats, SETTINGS['last_listing'], query)
 
     # -- the menu must never come back as a nested directory ----------
     def test_unresolvable_click_never_renders_the_menu(self):
@@ -227,7 +246,7 @@ class TestNavigation(unittest.TestCase):
 
     def test_root_without_history_is_the_only_implicit_menu(self):
         items = self.run_plugin('')
-        self.assertIn('Последно добавени', self.folders(items))
+        self.assertIn('Всички филми и сериали', self.folders(items))
         self.assertIn('Диагностика', self.folders(items))
 
     def test_listing_url_is_recovered_from_a_mangled_query(self):
@@ -261,7 +280,7 @@ class TestNavigation(unittest.TestCase):
 
     def test_menu_labels_resolve(self):
         items = self.run_plugin('?name=%D0%9C%D0%B5%D0%BD%D1%8E')
-        self.assertIn('Последно добавени', self.folders(items))
+        self.assertIn('Всички филми и сериали', self.folders(items))
         items = self.run_plugin('?name=%D0%A2%D1%8A%D1%80%D1%81%D0%B5%D0%BD%D0%B5')
         self.assertEqual(self.folders(items), ['Търсене'])
         self.run_plugin('?name=%D0%94%D0%B8%D0%B0%D0%B3%D0%BD%D0%BE%D1%81%D1%82%D0%B8%D0%BA%D0%B0')

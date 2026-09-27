@@ -55,10 +55,10 @@ def save_history(history):
     f.close()
 
 
-def add_to_history(text, url):
+def add_to_history(text, url=None):
     history = load_history()
-    history = [h for h in history if h['text'] != text]
-    history.insert(0, {'text': text, 'url': url})
+    history = [h for h in history if h.get('text') != text]
+    history.insert(0, {'text': text})
     history = history[:MAX_HISTORY]
     save_history(history)
 
@@ -222,6 +222,79 @@ if xxx == True:
 
 torrentsurl = listing_url(latest_categories, bgaudio=(bs != ''), show_xxx=xxx)
 
+# Menu rebuilt from scratch: the entries below are the whole menu.
+# Item URLs are compact (m/c/q/u/n keys) on purpose: the previous long
+# listing-in-URL items did not always survive Kodi, and a lost query meant
+# a dead click. Short values have nothing to lose.
+SEARCH_CATEGORIES = '0'
+ALL_CATEGORIES = '67;7;11;14;15;68;24;35;59;60;69'
+
+
+def all_url():
+    """All movies, TV shows and boxsets: the bare category URL."""
+    return baseurl + '/torrents?category=' + ALL_CATEGORIES
+
+
+def search_url(text):
+    """Search over all categories, spaces plus-encoded as confirmed."""
+    return listing_url(SEARCH_CATEGORIES,
+                       search=urllib.parse.quote_plus(text or ''),
+                       bgaudio=(bs != ''), show_xxx=xxx)
+
+
+MENU_ITEMS = [
+    (u'Търсене', {'m': '5'}),
+    (u'Филми HD', {'m': '1', 'c': '68'}),
+    (u'Филми 4K', {'m': '1', 'c': '60'}),
+    (u'Сериали', {'m': '1', 'c': '14'}),
+    (u'Сериали Boxset', {'m': '1', 'c': '15'}),
+    (u'Всички филми и сериали', {'m': '1', 'c': ALL_CATEGORIES,
+                                 'bare': '1'}),
+]
+
+# Labels from older menus, still resolvable so stale nodes keep working.
+STALE_LABELS = {
+    'Последно добавени': ('all', ''),
+    'Филми SD': ('cat', '67'),
+    'Филми VHS': ('cat', '59'),
+    'Филми DVD': ('cat', '11'),
+    'Филми DVD-R': ('cat', '11'),
+    'Филми Pack': ('cat', '69'),
+    'Български Филми': ('cat', '34'),
+    'Български Сериали': ('cat', '24'),
+    'Анимации': ('cat', '38'),
+    'Документални': ('cat', '7'),
+    'Филми GSM': ('cat', '35'),
+    'Футбол': ('cat', '64'),
+    'Формула 1': ('cat', '5'),
+    'Формула 2': ('cat', '57'),
+    'XXX': ('cat', '13;48;53;54'),
+}
+
+
+def build_item_url(params):
+    """Compact plugin URL; ';' in categories stays literal."""
+    parts = []
+    for key in ('m', 'c', 'q', 'u', 'n', 'bare'):
+        value = params.get(key)
+        if value in (None, ''):
+            continue
+        if key in ('q', 'u', 'n'):
+            value = urllib.parse.quote_plus(value)
+        parts.append(key + '=' + value)
+    return sys.argv[0] + '?' + '&'.join(parts)
+
+
+def add_menu_item(label, params, iconimage):
+    u = build_item_url(params)
+    liz = xbmcgui.ListItem(label)
+    liz.setArt({'thumb': iconimage, 'poster': iconimage,
+                'banner': iconimage, 'fanart': iconimage})
+    liz.setInfo(type="Video", infoLabels={"Title": label})
+    xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]), url=u, listitem=liz,
+                                isFolder=True)
+    return True
+
 # взимаме token
 r = s.get(baseurl, headers=headers_new)
 data_token = r.text
@@ -247,27 +320,9 @@ def CATEGORIES():
     # as a video file.
     xbmcplugin.setContent(int(sys.argv[1]), 'files')
 
-    FilmiYear = int(datetime.now().date().strftime("%Y"))
-
-    addDir(u'Търсене', torrentsurl, 5, '', __icon_search__)
-    addDir(u'Последно добавени', torrentsurl, 1, '', __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear) + u' година',
-           listing_url(latest_categories, search=str(FilmiYear),
-                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
-           __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear - 1) + u' година',
-           listing_url(latest_categories, search=str(FilmiYear - 1),
-                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
-           __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear - 2) + u' година',
-           listing_url(latest_categories, search=str(FilmiYear - 2),
-                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
-           __icon_folders__)
-
-    for cat in __categories__:
-        addDir(cat['cat_name'],
-               listing_url(cat['cat_ids'], bgaudio=(bs != ''), show_xxx=xxx),
-               1, '', __icon_folders__)
+    add_menu_item(u'Търсене', {'m': '5'}, __icon_search__)
+    for label, params in MENU_ITEMS[1:]:
+        add_menu_item(label, params, __icon_folders__)
 
     addDir('Диагностика', 'diagnostics', 7, '', __icon_folders__)
 
@@ -528,22 +583,25 @@ def INDEXPAGES(name, url):
                 next_page = a["href"]
                 break
         if next_page:
-            addDir('[COLOR CC00FF00][B]Следваща страница>>[/B][/COLOR]', next_page, 1, '', '')
+            add_menu_item('[COLOR CC00FF00][B]Следваща страница>>[/B][/COLOR]',
+                          {'m': '1', 'u': next_page, 'n': name}, __icon_folders__)
     else:
         Record('last_items', '0')
         Log('results table not found for %s' % url)
 
 
 # Екран за търсене с история
-def SEARCHSCREEN(base_url):
-    addDir(u'Търсене', base_url, 4, '', __icon_search__)
+def SEARCHSCREEN():
+    add_menu_item(u'Търсене', {'m': '5'}, __icon_search__)
 
     history = load_history()
     for item in history:
-        addDir(item['text'], item['url'], 4, '', __icon_sresult__)
+        text = item.get('text', '')
+        if text:
+            add_menu_item(text, {'m': '4', 'q': text}, __icon_sresult__)
 
     if history:
-        addDir(u'Изчисти историята', 'clear', 6, '', __icon_clear__)
+        add_menu_item(u'Изчисти историята', {'m': '6'}, __icon_clear__)
 
 
 def CLEARHISTORY():
@@ -577,7 +635,7 @@ def with_search(url, text=''):
 def resolve_label(label):
     """Best-effort action for a menu click that lost its parameters.
 
-    The label survives even when the long listing URL did not, and together
+    The label survives even when the request query did not, and together
     with the settings it is everything the request needs.
     Returns True when something was rendered.
     """
@@ -591,58 +649,82 @@ def resolve_label(label):
         DIAGNOSTICS()
         return True
     if label == 'Търсене':
-        SEARCHSCREEN(torrentsurl)
+        SEARCHSCREEN()
         return True
-    if label == 'Последно добавени':
-        prefs = (bs != '', xxx)
-        INDEXPAGES('Последно добавени',
-                   listing_url(latest_categories, bgaudio=prefs[0],
-                               show_xxx=prefs[1]))
+    for menu_label, params in MENU_ITEMS[1:]:
+        if menu_label == label:
+            run_compact(params, label)
+            return True
+    if label in STALE_LABELS:
+        kind, ids = STALE_LABELS[label]
+        run_compact({'m': '1', 'c': ids} if kind == 'cat'
+                    else {'m': '1', 'c': ALL_CATEGORIES, 'bare': '1'}, label)
         return True
     year = re.fullmatch(r'Филми от (\d{4}) година', label)
     if year:
-        INDEXPAGES(label, listing_url(latest_categories, search=year.group(1),
-                                      bgaudio=(bs != ''), show_xxx=xxx))
+        run_compact({'m': '4', 'q': year.group(1)}, label)
         return True
-    for cat in __categories__:
-        if cat['cat_name'] == label:
-            INDEXPAGES(label, listing_url(cat['cat_ids'],
-                                          bgaudio=(bs != ''), show_xxx=xxx))
-            return True
     # The label may be cut off mid-word, so accept a unique prefix match
     # ('Сериали' must not also match 'Сериали Boxset' - hence the exact
     # pass above).
     if len(label) >= 4:
-        candidates = [cat for cat in __categories__
-                      if cat['cat_name'].startswith(label)
-                      or label.startswith(cat['cat_name'])]
+        known = [menu_label for menu_label, _ in MENU_ITEMS[1:]]
+        candidates = [menu_label for menu_label in known
+                      if menu_label.startswith(label)
+                      or label.startswith(menu_label)]
         if len(candidates) == 1:
-            cat = candidates[0]
-            INDEXPAGES(cat['cat_name'],
-                       listing_url(cat['cat_ids'],
-                                   bgaudio=(bs != ''), show_xxx=xxx))
-            return True
+            return resolve_label(candidates[0])
     return False
 
 
-def SEARCH(url):
-    prefill = search_value(url)
-
-    if prefill:
-        INDEXPAGES('Търсачка', url)
-    else:
-        # xbmcgui.Keyboard, not xbmc.Keyboard (the latter does not exist and
-        # used to raise before the search screen could be shown).
-        keyb = xbmcgui.Keyboard('', 'Търсачка')
-        keyb.doModal()
-        if keyb.isConfirmed():
-            searchText = urllib.parse.quote_plus(keyb.getText())
-            searchText = searchText.replace('+', ' ')
-            full_url = with_search(url, searchText)
-            add_to_history(keyb.getText(), full_url)
-            INDEXPAGES('Търсачка', full_url)
+def run_compact(params, label=''):
+    """Execute a compact menu request (m/c/q/u keys)."""
+    mode = params.get('m')
+    if mode == '1':
+        cats = params.get('c', '')
+        if params.get('bare') == '1' or cats == ALL_CATEGORIES:
+            url = all_url()
         else:
-            SEARCHSCREEN(url)
+            url = listing_url(cats, bgaudio=(bs != ''), show_xxx=xxx)
+        INDEXPAGES(label or 'Категория', url)
+    elif mode == '4':
+        SEARCH(params.get('q', ''))
+    elif mode == '5':
+        SEARCH()
+    elif mode == '6':
+        CLEARHISTORY()
+    elif mode == '7':
+        DIAGNOSTICS()
+    elif mode == '9':
+        CATEGORIES()
+    else:
+        Blocked('Cannot open "%s". Try it again from the menu.'
+                % (label or 'this item'))
+
+
+def SEARCH(query=None):
+    """Run a search over all categories (category=0).
+
+    With a query the search runs at once (history entry); without one the
+    keyboard is shown first. Spaces stay plus-encoded, exactly like the
+    confirmed search URL.
+    """
+    if query and '/torrents' in query:
+        # Legacy full-URL history entry from an older release.
+        INDEXPAGES(u'Търсене', query)
+        return
+    if query:
+        add_to_history(query)
+        INDEXPAGES(u'Търсене: ' + query, search_url(query))
+        return
+    # xbmcgui.Keyboard, not xbmc.Keyboard (the latter does not exist and
+    # used to raise before the search screen could be shown).
+    keyb = xbmcgui.Keyboard('', 'Търсене')
+    keyb.doModal()
+    if keyb.isConfirmed() and keyb.getText().strip():
+        SEARCH(keyb.getText().strip())
+    else:
+        SEARCHSCREEN()
 
 
 def PLAY(torrent_url, title=''):
@@ -815,18 +897,34 @@ except:
 
 paramstring = sys.argv[2] if len(sys.argv) > 2 else ''
 is_root = not paramstring or len(paramstring) < 2
-recovered = recover_listing_url(paramstring)
+
+# Compact menu parameters (m/c/q/u/n): short on purpose, so the query
+# survives Kodi. Legacy mode/url/name below is only the fallback for nodes
+# cached by older releases.
+compact = {key: params.get(key) for key in ('m', 'c', 'q', 'u', 'n', 'bare')
+           if params.get(key) not in (None, '')}
 
 # What did Kodi actually hand us? Shown by Diagnostics, because a mangled
 # query is the difference between a listing and the root menu reappearing.
 Record('last_call', 'mode=%s url=%s raw=%s'
-       % (mode, (url or '')[:200], paramstring[:400]))
+       % (compact.get('m', mode), (compact.get('u') or url or '')[:200],
+          paramstring[:400]))
 
-if not url:
-    url = recovered
+if compact.get('m') == '1' and compact.get('u'):
+    # Next-page link: the only compact request carrying a full URL.
+    INDEXPAGES(name or compact.get('n', '') or 'Категория', compact['u'])
 
-if mode == None and is_root:
-    # The real add-on root: reopen the last listing, or show the menu once.
+elif compact.get('m') in ('1', '4', '5', '6', '7', '9'):
+    run_compact(compact, name or compact.get('n', ''))
+
+elif compact:
+    Log('unknown compact request: raw=%s' % paramstring)
+    Record('last_error', 'unknown request')
+    Blocked('Cannot open this item. Try it again from the menu.\n\nRequest: %s'
+            % paramstring[:300])
+
+elif mode == None and is_root:
+    # The real add-on root: reopen the last listing, or show the menu.
     if GetSetting('start_at_last') == 'true' and GetSetting('last_listing'):
         INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
                    GetSetting('last_listing'))
@@ -837,22 +935,24 @@ if mode == None and is_root:
 elif mode == None:
     if name and resolve_label(name):
         pass
-    elif url and '/torrents' in url:
+    elif (url or recover_listing_url(paramstring)) and \
+            '/torrents' in (url or recover_listing_url(paramstring)):
+        address = url or recover_listing_url(paramstring)
         INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
-                   url)
+                   address)
     elif is_root:
         CATEGORIES()
     else:
-        # Report, do not substitute: showing the last viewed listing here is
-        # what made every category display the previous search results.
-        Log('unresolvable call: mode=None name=%s url=%s raw=%s'
-            % (name, url, paramstring))
-        Record('last_error', 'unresolvable call: mode=None name=%s' % name)
-        Blocked('Cannot open "%s". Try it again from the menu.'
-                % (name or 'this item'))
+        # Report with the request attached, do not substitute: showing other
+        # content here is what made every category display previous results.
+        Log('unresolvable call: raw=%s' % paramstring)
+        Record('last_error', 'unresolvable call name=%s' % name)
+        Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
+                % (name or compact.get('n', '') or 'this item',
+                   paramstring[:300]))
 
 elif mode == 9:
-    # Explicit "Меню" entry: the menu is only ever rendered on request.
+    # Stale "Меню" entry: the menu is only ever rendered on request.
     CATEGORIES()
 
 elif mode == 7:
@@ -866,29 +966,30 @@ elif mode == 2:
     PLAY(url, name or '')
 
 elif mode == 5:
-    SEARCHSCREEN(url or torrentsurl)
+    SEARCHSCREEN()
 
 elif mode in (1, 4):
-    if not url and name and resolve_label(name):
+    address = url or recover_listing_url(paramstring)
+    if not address and name and resolve_label(name):
         pass
-    elif not url:
+    elif not address:
         Log('unresolvable call: mode=%s name=%s raw=%s'
             % (mode, name, paramstring))
         Record('last_error', 'unresolvable call: mode=%s' % mode)
-        Blocked('Cannot open this item: no listing address in the request. '
-                'Open Диагностика for the recorded request.')
+        Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
+                % (name or 'this item', paramstring[:300]))
     elif mode == 4:
-        print("" + url)
-        SEARCH(url)
+        print("" + address)
+        SEARCH(address)
     else:
-        print("" + url)
-        INDEXPAGES(name, url)
+        print("" + address)
+        INDEXPAGES(name, address)
 
 else:
     Log('unresolvable call: mode=%s url=%s raw=%s' % (mode, url, paramstring))
     Record('last_error', 'unresolvable call: mode=%s' % mode)
-    Blocked('Cannot open this item (mode=%s). Open Диагностика for the '
-            'recorded request.' % mode)
+    Blocked('Cannot open "%s". Try it again from the menu.\n\nRequest: %s'
+            % (name or 'this item', paramstring[:300]))
 
 # cacheToDisc=False: Kodi must never serve a saved copy of a live tracker
 # listing, otherwise a revisited category shows the previous content.
