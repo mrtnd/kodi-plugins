@@ -87,7 +87,8 @@ def new_search():
 
 def diagnostics():
     """On-screen state so a failure can be read on the TV, not guessed."""
-    from resources.lib.kodi_utils import elementum_present, get_profile_dir
+    from resources.lib.kodi_utils import (
+        elementum_present, get_last_play, get_profile_dir)
     from resources.lib.vpngate import VPNGate
     user = get_setting('p2pbg_user') or '(not set)'
     ok, label = VPNGate(country=get_setting('vpn_country') or 'BG').check()
@@ -98,6 +99,7 @@ def diagnostics():
             label, get_setting('vpn_country') or 'BG', 'OK' if ok else 'BLOCKED'),
         'User: {}'.format(user),
         'Profile: {}'.format(get_profile_dir()),
+        'Last play: {}'.format(get_last_play() or 'none'),
         'Last error: {}'.format(get_last_error() or 'none'),
     ]
     show_blocking('\n'.join(lines), title='P2PBG+ diagnostics')

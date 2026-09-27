@@ -239,9 +239,24 @@ class TestPlayback(unittest.TestCase):
             playback.play(self._client(raw), 'a' * 40, 'Show',
                           'https://x/download.php?id=1')
         stage.assert_called_once_with(raw, 'a' * 40)
-        self.assertEqual(resolved.call_args[0][0],
-                         'file:///tmp/p2pbgtest/a.torrent')
+        # Bare absolute path: a file:// prefix makes Elementum fail to play.
+        self.assertEqual(resolved.call_args[0][0], '/tmp/p2pbgtest/a.torrent')
+        self.assertNotIn('file://', resolved.call_args[0][0])
         self.assertEqual(resolved.call_args[0][1], 'Show')
+
+    def test_uri_is_percent_encoded_but_keeps_separators(self):
+        from resources.lib.playback import play
+        with patch('resources.lib.playback.VPNGate') as gate_cls, \
+                patch('resources.lib.playback.get_profile_dir',
+                      return_value='/tmp/my profile'), \
+                patch('resources.lib.playback._stage_torrent',
+                      return_value='/tmp/my profile/' + 'a' * 40 + '.torrent'), \
+                patch('resources.lib.kodi_utils.resolve_play') as resolved:
+            gate_cls.return_value.check.return_value = (True, 'BG')
+            play(self._client(), 'a' * 40, 'Show', 'https://x/d.torrent')
+        uri = resolved.call_args[0][0]
+        self.assertIn('/tmp/my%20profile/', uri)
+        self.assertNotIn('+', uri)
 
     def test_stages_real_bytes_into_the_profile_dir(self):
         import tempfile
@@ -260,8 +275,7 @@ class TestPlayback(unittest.TestCase):
         resolved = self._play(client, torrent_url='')
         self.assertTrue(client.details.called)
         self.assertTrue(resolved.called)
-        self.assertEqual(resolved.call_args[0][0],
-                         'file:///tmp/p2pbgtest/a.torrent')
+        self.assertEqual(resolved.call_args[0][0], '/tmp/p2pbgtest/a.torrent')
 
     def test_vpn_gate_blocks_playback(self):
         from resources.lib import playback

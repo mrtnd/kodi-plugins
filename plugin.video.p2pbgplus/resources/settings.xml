@@ -14,5 +14,7 @@
     <category label="30020">
         <setting label="" type="text" id="firstrun" default="true" visible="false"/>
         <setting label="30021" type="text" id="search_history" default="" visible="false"/>
+        <setting label="" type="text" id="last_error" default="" visible="false"/>
+        <setting label="" type="text" id="last_play" default="" visible="false"/>
     </category>
 </settings>

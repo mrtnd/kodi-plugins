@@ -247,10 +247,14 @@ def play(client, tid, title='', torrent_url=''):
         show_blocking('Could not write the torrent file: {}'.format(exc))
         return
     log('staged {} ({} bytes) for {}'.format(path, len(raw), title))
-    _resolve('file://' + quote(path), title)
+    # Elementum expects a bare absolute path here (what the working reference
+    # add-on passes); a file:// prefix makes it fail to play.
+    _resolve(quote(path, safe='/'), title)
 
 
 def _resolve(uri, title):
     """Hand the resolved URI to Kodi; never call endOfDirectory after this."""
-    from resources.lib.kodi_utils import resolve_play
+    from resources.lib.kodi_utils import record_play, resolve_play
+    record_play(uri)
+    log('resolving {}'.format(uri))
     resolve_play(uri, title)

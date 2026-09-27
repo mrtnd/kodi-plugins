@@ -40,6 +40,21 @@ def get_last_error():
         return ''
 
 
+def record_play(uri):
+    """Remember the URI handed to Elementum so Diagnostics can show it."""
+    try:
+        ADDON.setSetting('last_play', uri or '')
+    except Exception:
+        pass
+
+
+def get_last_play():
+    try:
+        return get_setting('last_play')
+    except Exception:
+        return ''
+
+
 def notify(message, title='P2PBG'):
     xbmcgui.Dialog().notification(title, message, xbmcgui.NOTIFICATION_INFO, 4000)
 

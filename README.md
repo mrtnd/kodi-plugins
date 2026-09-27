@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.5.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.5.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -188,8 +188,9 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
 - Playback chain (same request pattern as the proven reference add-on
   `plugin.video.p2pbg`): tracker session + CSRF login → details page per
   torrent → `.torrent` fetch → stage in the profile directory → hand the
-  local path to Elementum (`play?uri=`). If the `.torrent` download fails
-  the add-on falls back to a magnet link built from the details info-hash.
+  bare absolute path to Elementum (`play?uri=`, no `file://` prefix - Elementum
+  rejects that). If the `.torrent` download fails the add-on falls back to a
+  magnet link built from the details info-hash.
 - The only added behaviour is the **fail-closed VPN country gate** before
   playback (mismatch or check failure blocks with a dialog) and a
   **Диагностика** menu entry that shows Elementum presence, VPN state,
