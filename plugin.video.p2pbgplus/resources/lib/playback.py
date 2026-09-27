@@ -99,32 +99,47 @@ def search_and_show(client, query):
     show_items(items, next_page, 'Search: {}'.format(query))
 
 
-def _fetch_torrent(client, tid):
-    """Details + .torrent bytes + decoded meta, with user-facing errors."""
+def _fetch_torrent(client, tid, title=''):
+    """Details + .torrent bytes + decoded meta, with user-facing errors.
+
+    Prefers the direct download.php?id=<tid> path (same id as the details
+    page); falls back to scraping the details page for the download link.
+    """
+    raw = None
     try:
-        details = client.details(tid)
+        raw = client.download_by_id(tid, title or tid)
     except AuthError as exc:
         return None, 'Tracker login failed: {}'.format(exc)
-    except Exception as exc:
-        return None, 'Failed to load torrent details: {}'.format(exc)
-    if not details.get('torrent_url'):
-        return None, 'No downloadable torrent file on the details page.'
+    except Exception:
+        raw = None
+    if raw is None:
+        try:
+            details = client.details(tid)
+        except AuthError as exc:
+            return None, 'Tracker login failed: {}'.format(exc)
+        except Exception as exc:
+            return None, 'Failed to load torrent details: {}'.format(exc)
+        if not details.get('torrent_url'):
+            return None, 'No downloadable torrent file on the details page.'
+        try:
+            raw = client.download_torrent(details['torrent_url'])
+        except Exception as exc:
+            return None, 'Failed to fetch torrent file: {}'.format(exc)
     try:
-        raw = client.download_torrent(details['torrent_url'])
         meta = torrentfile.bdecode(raw)
     except Exception as exc:
-        return None, 'Failed to fetch torrent file: {}'.format(exc)
-    return (details, raw, meta), ''
+        return None, 'Failed to parse torrent file: {}'.format(exc)
+    return (raw, meta), ''
 
 
 def list_files(client, tid, title=''):
     """Episode/file picker. Single-video torrents play immediately."""
     from resources.lib.kodi_utils import add_dir_item, end_directory
-    result, error = _fetch_torrent(client, tid)
+    result, error = _fetch_torrent(client, tid, title)
     if error:
         show_blocking(error)
         return
-    _details, _raw, meta = result
+    _raw, meta = result
     videos = torrentfile.video_files(torrentfile.file_entries(meta))
     if not videos:
         show_blocking('No video file inside this torrent.')
@@ -153,11 +168,11 @@ def play_torrent(client, tid, title='', file_index=None):
             'while the check does not pass.'.format(label or '?',
                                                     gate.country))
         return
-    result, error = _fetch_torrent(client, tid)
+    result, error = _fetch_torrent(client, tid, title)
     if error:
         show_blocking(error)
         return
-    _details, raw, meta = result
+    raw, meta = result
     videos = torrentfile.video_files(torrentfile.file_entries(meta))
     if not videos:
         show_blocking('No video file inside this torrent.')

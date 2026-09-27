@@ -134,6 +134,16 @@ class P2PBGClient:
         res = self._get('{}/torrents/{}'.format(self.base_url, tid))
         return parse_details(res.text, self.base_url, tid)
 
+    def download_by_id(self, tid, filename='download'):
+        """Direct .torrent fetch: download.php?id=<tid> needs no details page
+        round-trip (the id is the same 40-hex hex)."""
+        from urllib.parse import quote
+        if not re.fullmatch(r'[a-f0-9]{40}', tid or ''):
+            raise ValueError('invalid torrent id')
+        url = '{}/download.php?id={}&f={}.torrent'.format(
+            self.base_url, tid, quote(filename))
+        return self.download_torrent(url)
+
     def download_torrent(self, url):
         res = self._get(urljoin(self.base_url, url))
         data = res.content

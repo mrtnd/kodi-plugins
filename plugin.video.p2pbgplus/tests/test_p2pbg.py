@@ -206,6 +206,7 @@ class TestFileSelection(unittest.TestCase):
         client = MagicMock()
         client.details.return_value = {'torrent_url': 'https://x/y.torrent'}
         client.download_torrent.return_value = raw
+        client.download_by_id.return_value = raw
         return client
 
     def _boxset_raw(self):
@@ -214,6 +215,42 @@ class TestFileSelection(unittest.TestCase):
                             {b'path': [b'show.s03e02.mkv'], b'length': 200},
                             {b'path': [b'cover.jpg'], b'length': 3}]}
         return _benc({b'announce': b'https://t/x', b'info': info})
+
+    def test_direct_download_by_id(self):
+        from resources.lib.p2pbg import P2PBGClient
+        client = P2PBGClient()
+        resp = MagicMock()
+        resp.content = b'd4:infoe'
+        resp.raise_for_status = lambda: None
+        client.session.get = MagicMock(return_value=resp)
+        raw = client.download_by_id('a' * 40, 'Some Title')
+        self.assertEqual(raw, b'd4:infoe')
+        url = client.session.get.call_args[0][0]
+        self.assertIn('download.php?id=' + 'a' * 40, url)
+        with self.assertRaises(ValueError):
+            client.download_by_id('xyz', 'Some Title')
+
+    def test_fetch_prefers_direct_then_details(self):
+        from resources.lib import playback
+        raw = _sample_torrent()
+        client = MagicMock()
+        client.download_by_id.return_value = raw
+        result, error = playback._fetch_torrent(client, 'a' * 40, 'T')
+        self.assertEqual(error, '')
+        self.assertEqual(result[0], raw)
+        client.details.assert_not_called()
+
+    def test_fetch_falls_back_to_details(self):
+        from resources.lib import playback
+        raw = _sample_torrent()
+        client = MagicMock()
+        client.download_by_id.side_effect = ValueError('nope')
+        client.details.return_value = {
+            'torrent_url': 'https://x/download.php?id=1'}
+        client.download_torrent.return_value = raw
+        result, error = playback._fetch_torrent(client, 'a' * 40, 'T')
+        self.assertEqual(error, '')
+        self.assertEqual(result[0], raw)
 
     def test_single_video_autoplays(self):
         from resources.lib import playback
