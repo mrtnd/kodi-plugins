@@ -51,8 +51,7 @@ class P2PBGClient:
         self.username = username or ''
         self.password = password or ''
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': USER_AGENT,
-                                     'Referer': self.base_url + '/'})
+        self.session.headers.update({'User-Agent': USER_AGENT})
         self._logged_in = False
 
     # -- auth ---------------------------------------------------------
@@ -135,73 +134,12 @@ class P2PBGClient:
         res = self._get('{}/torrents/{}'.format(self.base_url, tid))
         return parse_details(res.text, self.base_url, tid)
 
-    def preview(self, tid):
-        """Rich summary via the tracker's preview API (poster, trailer,
-        Bulgarian metadata, synopsis). Best-effort: {} on any failure."""
-        try:
-            res = self._get(self.base_url + '/api/torrent/preview/' + tid,
-                            headers={'Accept': 'application/json'})
-            content = (res.json().get('content') or '')
-        except Exception:
-            return {}
-        if not content:
-            return {}
-        return parse_preview(content, self.base_url)
-
     def download_torrent(self, url):
         res = self._get(urljoin(self.base_url, url))
         data = res.content
         if not data.startswith(b'd'):
             raise ValueError('response is not a torrent file')
         return data
-
-
-def parse_preview(content_html, base_url):
-    """Parse a preview-API content fragment into a metadata dict."""
-    soup = BeautifulSoup(content_html, 'html.parser')
-    text = soup.get_text(' | ', strip=True)
-    fields = {}
-    for label in ('Име на торента', 'Заглавие на Български', 'Жанр',
-                  'Режисьор', 'Държава', 'Година', 'Дължина',
-                  'Субтитри', 'Преводач', 'В ролите', 'Резюме'):
-        match = re.search(label + r'\s*\|?\s*([^|]{0,400})', text)
-        if match:
-            fields[label] = match.group(1).strip()
-    poster = ''
-    for img in soup.select('img[src]'):
-        src = img.get('src', '')
-        if not src or 'torrent-flag' in src or 'youtube' in src.lower():
-            continue
-        poster = urljoin(base_url + '/', src)
-        break
-    trailer = ''
-    for anchor in soup.select('a[href]'):
-        href = anchor.get('href', '')
-        if 'youtube.com/watch' in href or 'youtu.be/' in href:
-            trailer = href
-            break
-    plot = _compose_plot(fields)
-    return {'fields': fields, 'poster': poster, 'trailer': trailer,
-            'plot': plot}
-
-
-def _compose_plot(fields):
-    lines = []
-    for label, key in (('Жанр', 'Жанр'), ('Режисьор', 'Режисьор'),
-                       ('В ролите', 'В ролите'), ('Държава', 'Държава'),
-                       ('Субтитри', 'Субтитри')):
-        if fields.get(key):
-            lines.append('{}: {}'.format(label, fields[key]))
-    facts = []
-    for key in ('Година', 'Дължина'):
-        if fields.get(key):
-            facts.append(fields[key])
-    if facts:
-        lines.append(' | '.join(facts))
-    synopsis = fields.get('Резюме', '')
-    if lines and synopsis:
-        return '\n'.join(lines) + '\n\n' + synopsis
-    return '\n'.join(lines) if lines else synopsis
 
 
 SHOW_PREVIEW = re.compile(r'''showPreview\(['"]([a-f0-9]{40})['"]\)''')
@@ -249,12 +187,14 @@ def parse_search_rows(html_page, base_url):
     if table is None:
         return []
     items = []
+    seen = set()
     for tr in table.select('tbody tr'):
         # Direct cells only: the layout nests tables for side blocks.
         cells = tr.find_all('td', recursive=False)
         tid, title = _row_identity(tr)
-        if not tid:
+        if not tid or tid in seen:
             continue
+        seen.add(tid)
         texts = [c.get_text(' ', strip=True) for c in cells]
         size_idx = next(
             (i for i, t in enumerate(texts)

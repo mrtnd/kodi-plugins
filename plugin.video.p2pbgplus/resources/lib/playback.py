@@ -99,12 +99,8 @@ def search_and_show(client, query):
     show_items(items, next_page, 'Search: {}'.format(query))
 
 
-def _fetch_torrent(client, tid, title=''):
-    """Details page first, then the .torrent download it links.
-
-    Always goes through the details page like the browser does; the
-    direct download.php?id=<tid> shortcut proved unreliable.
-    """
+def _fetch_torrent(client, tid):
+    """Details + .torrent bytes + decoded meta, with user-facing errors."""
     try:
         details = client.details(tid)
     except AuthError as exc:
@@ -118,47 +114,29 @@ def _fetch_torrent(client, tid, title=''):
         meta = torrentfile.bdecode(raw)
     except Exception as exc:
         return None, 'Failed to fetch torrent file: {}'.format(exc)
-    return (raw, meta), ''
+    return (details, raw, meta), ''
 
 
 def list_files(client, tid, title=''):
     """Episode/file picker. Single-video torrents play immediately."""
     from resources.lib.kodi_utils import add_dir_item, end_directory
-    try:
-        result, error = _fetch_torrent(client, tid, title)
-        if error:
-            show_blocking(error)
-            return
-        _raw, meta = result
-        videos = torrentfile.video_files(torrentfile.file_entries(meta))
-    except Exception as exc:
-        show_blocking('Could not open torrent ({}).'.format(exc))
+    result, error = _fetch_torrent(client, tid)
+    if error:
+        show_blocking(error)
         return
+    _details, _raw, meta = result
+    videos = torrentfile.video_files(torrentfile.file_entries(meta))
     if not videos:
         show_blocking('No video file inside this torrent.')
         return
     if len(videos) == 1:
         play_torrent(client, tid, title, file_index=videos[0][0])
         return
-    summary = {}
-    try:
-        summary = client.preview(tid)
-    except Exception:
-        summary = {}
-    plot = summary.get('plot', '') if isinstance(summary, dict) else ''
     for index, path, _size in videos:
         name = path.split('/')[-1]
-        art = None
-        if isinstance(summary, dict) and summary.get('poster'):
-            art = {'poster': summary['poster'],
-                   'thumb': summary['poster'],
-                   'fanart': summary['poster']}
         add_dir_item(name, {'action': 'play', 'id': tid,
                             'title': name, 'file_index': str(index)},
-                     is_folder=False,
-                     info={'title': name, 'plot': plot} if plot
-                     else {'title': name},
-                     art=art)
+                     is_folder=False, info={'title': name})
     end_directory(title or 'Select file')
 
 
@@ -175,11 +153,11 @@ def play_torrent(client, tid, title='', file_index=None):
             'while the check does not pass.'.format(label or '?',
                                                     gate.country))
         return
-    result, error = _fetch_torrent(client, tid, title)
+    result, error = _fetch_torrent(client, tid)
     if error:
         show_blocking(error)
         return
-    raw, meta = result
+    _details, raw, meta = result
     videos = torrentfile.video_files(torrentfile.file_entries(meta))
     if not videos:
         show_blocking('No video file inside this torrent.')
