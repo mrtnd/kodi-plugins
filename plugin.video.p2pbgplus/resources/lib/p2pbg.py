@@ -51,7 +51,8 @@ class P2PBGClient:
         self.username = username or ''
         self.password = password or ''
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': USER_AGENT})
+        self.session.headers.update({'User-Agent': USER_AGENT,
+                                     'Referer': self.base_url + '/'})
         self._logged_in = False
 
     # -- auth ---------------------------------------------------------
@@ -146,16 +147,6 @@ class P2PBGClient:
         if not content:
             return {}
         return parse_preview(content, self.base_url)
-
-    def download_by_id(self, tid, filename='download'):
-        """Direct .torrent fetch: download.php?id=<tid> needs no details page
-        round-trip (the id is the same 40-hex hex)."""
-        from urllib.parse import quote
-        if not re.fullmatch(r'[a-f0-9]{40}', tid or ''):
-            raise ValueError('invalid torrent id')
-        url = '{}/download.php?id={}&f={}.torrent'.format(
-            self.base_url, tid, quote(filename))
-        return self.download_torrent(url)
 
     def download_torrent(self, url):
         res = self._get(urljoin(self.base_url, url))

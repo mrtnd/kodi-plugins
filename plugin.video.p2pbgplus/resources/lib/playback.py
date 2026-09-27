@@ -100,35 +100,24 @@ def search_and_show(client, query):
 
 
 def _fetch_torrent(client, tid, title=''):
-    """Details + .torrent bytes + decoded meta, with user-facing errors.
+    """Details page first, then the .torrent download it links.
 
-    Prefers the direct download.php?id=<tid> path (same id as the details
-    page); falls back to scraping the details page for the download link.
+    Always goes through the details page like the browser does; the
+    direct download.php?id=<tid> shortcut proved unreliable.
     """
-    raw = None
     try:
-        raw = client.download_by_id(tid, title or tid)
+        details = client.details(tid)
     except AuthError as exc:
         return None, 'Tracker login failed: {}'.format(exc)
-    except Exception:
-        raw = None
-    if raw is None:
-        try:
-            details = client.details(tid)
-        except AuthError as exc:
-            return None, 'Tracker login failed: {}'.format(exc)
-        except Exception as exc:
-            return None, 'Failed to load torrent details: {}'.format(exc)
-        if not details.get('torrent_url'):
-            return None, 'No downloadable torrent file on the details page.'
-        try:
-            raw = client.download_torrent(details['torrent_url'])
-        except Exception as exc:
-            return None, 'Failed to fetch torrent file: {}'.format(exc)
+    except Exception as exc:
+        return None, 'Failed to load torrent details: {}'.format(exc)
+    if not details.get('torrent_url'):
+        return None, 'No downloadable torrent file on the details page.'
     try:
+        raw = client.download_torrent(details['torrent_url'])
         meta = torrentfile.bdecode(raw)
     except Exception as exc:
-        return None, 'Failed to parse torrent file: {}'.format(exc)
+        return None, 'Failed to fetch torrent file: {}'.format(exc)
     return (raw, meta), ''
 
 
