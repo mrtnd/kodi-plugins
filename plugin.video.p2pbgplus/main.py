@@ -6,12 +6,10 @@ import xbmcgui
 
 from resources.lib.kodi_utils import (
     add_dir_item, add_search_history, clear_search_history, end_directory,
-    get_search_history, get_setting, notify,
+    get_last_error, get_search_history, get_setting, notify, show_blocking,
 )
-from resources.lib.p2pbg import AuthError, CATEGORIES, P2PBGClient
-from resources.lib.playback import (
-    list_catalog, list_files, play_torrent, search_and_show,
-)
+from resources.lib.p2pbg import CATEGORIES, DEFAULT_CATEGORIES, P2PBGClient
+from resources.lib.playback import list_catalog, play, search_and_show
 
 
 def _client():
@@ -34,13 +32,14 @@ def main_menu():
     _first_run_check()
     add_dir_item('Търсене', {'action': 'search_menu'})
     add_dir_item('Последно добавени', {'action': 'catalog',
-                                       'url': 'latest'})
+                                       'url': 'cat:'})
     for offset in range(3):
         add_dir_item('Филми от {} година'.format(year - offset),
                      {'action': 'search', 'query': str(year - offset)})
     for cat_id, cat_name in CATEGORIES:
         add_dir_item(cat_name, {'action': 'catalog',
                                 'url': 'cat:' + cat_id})
+    add_dir_item('Диагностика', {'action': 'diagnostics'})
     end_directory('P2PBG+ Torrents')
 
 
@@ -61,19 +60,14 @@ def _first_run_check():
 
 
 def _catalog_url(spec):
-    prefs = _prefs()
-    active = '1'
-    hide = 'off' if prefs['show_xxx'] else 'on'
-    extra = '&bgaudio=1' if prefs['bgaudio'] else ''
-    if spec == 'latest':
-        base = '/torrents'
-    elif spec.startswith('cat:'):
-        return '{}?category={}&active={}&hidexxx={}{}'.format(
-            _client().base_url + '/torrents', spec[4:], active, hide, extra)
-    else:
+    """Latest / category listing URL; next-page URLs pass through untouched."""
+    if not spec.startswith('cat:'):
         return spec  # next-page absolute URL
-    return '{}?active={}&hidexxx={}{}'.format(
-        _client().base_url + base, active, hide, extra)
+    client = _client()
+    prefs = _prefs()
+    categories = spec[4:] if spec[4:] else DEFAULT_CATEGORIES
+    return client.listing_url(categories=categories, bgaudio=prefs['bgaudio'],
+                              show_xxx=prefs['show_xxx'])
 
 
 def search_menu():
@@ -89,6 +83,24 @@ def new_search():
     if kb and kb.strip():
         add_search_history(kb)
         search_and_show(_client(), kb)
+
+
+def diagnostics():
+    """On-screen state so a failure can be read on the TV, not guessed."""
+    from resources.lib.kodi_utils import elementum_present, get_profile_dir
+    from resources.lib.vpngate import VPNGate
+    user = get_setting('p2pbg_user') or '(not set)'
+    ok, label = VPNGate(country=get_setting('vpn_country') or 'BG').check()
+    lines = [
+        'Elementum: {}'.format('installed' if elementum_present()
+                                else 'NOT INSTALLED'),
+        'VPN country: {} (required {}, gate {})'.format(
+            label, get_setting('vpn_country') or 'BG', 'OK' if ok else 'BLOCKED'),
+        'User: {}'.format(user),
+        'Profile: {}'.format(get_profile_dir()),
+        'Last error: {}'.format(get_last_error() or 'none'),
+    ]
+    show_blocking('\n'.join(lines), title='P2PBG+ diagnostics')
 
 
 def router(paramstring):
@@ -108,19 +120,13 @@ def router(paramstring):
         clear_search_history()
         notify('Search history cleared.')
     elif action == 'play':
-        client = _client()
-        try:
-            client.login()
-        except AuthError as exc:
-            from resources.lib.kodi_utils import show_blocking
-            show_blocking('Tracker login failed: {}'.format(exc))
-            return
-        play_torrent(client, params.get('id', ''),
-                     params.get('title', ''),
-                     file_index=params.get('file_index'))
+        play(_client(), params.get('id', ''), params.get('title', ''),
+             params.get('url', ''))
+    elif action == 'diagnostics':
+        diagnostics()
     elif action == 'files':
-        list_files(_client(), params.get('id', ''),
-                   params.get('title', ''))
+        # Stale bookmarks from the folder-based picker: play instead.
+        play(_client(), params.get('id', ''), params.get('title', ''))
     else:
         main_menu()
 

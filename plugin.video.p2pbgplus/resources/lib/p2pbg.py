@@ -1,18 +1,22 @@
-"""p2pbg.com tracker client: login (CSRF), search, details, .torrent fetch."""
+"""p2pbg.com tracker client.
+
+Request pattern (session headers, homepage CSRF token, login POST fields,
+details-page download link) follows the proven reference plugin
+plugin.video.p2pbg 2026.09.24.01, so anything that worked there keeps
+working here.
+"""
 from __future__ import annotations
 
 import re
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-USER_AGENT = (
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-    '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-)
+# Reference plugin UA + the exact header set it sends on every request.
+USER_AGENT = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36')
 
-# Video categories worth searching by default (Movies HD/4K/SD/BG + TV/TV BG).
 DEFAULT_CATEGORIES = '68;60;67;34;14;24'
 
 # Browse folders (Bulgarian labels, incl. sports added after user feedback).
@@ -45,87 +49,94 @@ class AuthError(Exception):
 
 
 class P2PBGClient:
+    """Authenticated session against p2pbg.com.
+
+    Mirrors the reference plugin: one ``requests.Session`` carrying
+    ``user-agent``/``referer``/``host`` on every call, CSRF token taken from
+    the homepage, and a login POST with ``_token``/``returnto``/``uid``/``pwd``.
+    """
+
     def __init__(self, base_url='https://www.p2pbg.com', username='',
                  password=''):
         self.base_url = (base_url or '').rstrip('/') or 'https://www.p2pbg.com'
         self.username = username or ''
         self.password = password or ''
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': USER_AGENT})
+        self.session.headers.update({
+            'user-agent': USER_AGENT,
+            'referer': self.base_url + '/',
+            'host': urlparse(self.base_url).netloc or 'www.p2pbg.com',
+        })
         self._logged_in = False
 
     # -- auth ---------------------------------------------------------
     def login(self):
-        """Login with CSRF token; raises AuthError on failure."""
+        """Login exactly like the reference plugin; raises AuthError."""
         if not self.username or not self.password:
             raise AuthError('tracker username/password are not configured')
-        page = self.session.get(self.base_url + '/login', timeout=12)
+        page = self.session.get(self.base_url + '/', timeout=20)
         page.raise_for_status()
-        token = re.search(r'name="_token" value="([^"]+)"', page.text)
-        if not token:
-            raise AuthError('login form token not found (site changed?)')
+        token_match = re.search(r'token".+?"(.+?)"', page.text)
+        if not token_match:
+            raise AuthError('CSRF token not found (site markup changed?)')
         res = self.session.post(
-            self.base_url + '/login', timeout=12,
-            data={'_token': token.group(1), 'returnto': '',
-                  'uid': self.username, 'pwd': self.password,
-                  'remember': '1'},
-            headers={'Referer': self.base_url + '/login'},
-            allow_redirects=True)
+            self.base_url + '/login', timeout=20,
+            data={'_token': token_match.group(1), 'returnto': '',
+                  'uid': self.username, 'pwd': self.password},
+            headers={'referer': self.base_url + '/'}, allow_redirects=True)
         res.raise_for_status()
-        if '/logout' not in res.text and 'logout' not in res.text.lower():
+        if self._is_login_page(res):
             raise AuthError('login failed (check username/password)')
         self._logged_in = True
 
+    @staticmethod
+    def _is_login_page(response) -> bool:
+        """The tracker serves the login form when the session is not valid."""
+        if '/login' in (getattr(response, 'url', '') or ''):
+            return True
+        text = getattr(response, 'text', '') or ''
+        return 'name="uid"' in text and 'name="pwd"' in text
+
     def _get(self, url, **kwargs):
-        """GET with one transparent re-login on session expiry."""
-        res = self.session.get(url, timeout=12, **kwargs)
-        if self._looks_logged_out(res):
-            self._logged_in = False
+        """GET with one transparent re-login when the session expired."""
+        res = self.session.get(url, timeout=20, **kwargs)
+        if self._is_login_page(res):
             self.login()
-            res = self.session.get(url, timeout=12, **kwargs)
+            res = self.session.get(url, timeout=20, **kwargs)
+            if self._is_login_page(res):
+                raise AuthError('session refused by tracker (logged out)')
         res.raise_for_status()
         return res
 
-    @staticmethod
-    def _looks_logged_out(response) -> bool:
-        url = getattr(response, 'url', '') or ''
-        if '/login' in url:
-            return True
-        text = getattr(response, 'text', '') or ''
-        return 'name="pwd"' in text and 'name="uid"' in text
-
     def fetch(self, url):
-        """Authenticated GET returning text (re-login once on expiry)."""
+        """Authenticated GET returning text."""
         return self._get(url).text
 
-    # -- search -------------------------------------------------------
-    def _listing_url(self, query=None, categories=DEFAULT_CATEGORIES,
-                     active='1', bgaudio=False, show_xxx=False):
-        """Query string built exactly like the site's own form: literal
-        ';' category separators and raw spaces (NOT urlencode, which turns
-        ';' into %3B and spaces into '+' and the site then ignores filters).
+    # -- listing URLs -------------------------------------------------
+    def listing_url(self, categories=DEFAULT_CATEGORIES, query=None,
+                    bgaudio=False, show_xxx=False, active='1'):
+        """Query string built exactly like the site form and the reference
+        plugin: literal ';' category separators, ``&active``/``&hidexxx``
+        flags and a trailing raw ``&search=``.
         """
-        from urllib.parse import quote_plus
-        parts = ['category=' + categories, 'active=' + active,
-                 'hidexxx=' + ('off' if show_xxx else 'on')]
+        url = '{}?category={}'.format(self.base_url + '/torrents', categories)
         if bgaudio:
-            parts.append('bgaudio=1')
+            url += '&bgaudio=1'
+        url += '&active={}&hidexxx={}'.format(
+            active, 'off' if show_xxx else 'on')
         if query:
-            parts.append('search=' + quote_plus(query).replace('+', ' '))
-        return self.base_url + '/torrents?' + '&'.join(parts)
+            url += '&search=' + quote_plus(query).replace('+', ' ')
+        return url
 
-    def search(self, query, categories=DEFAULT_CATEGORIES, active='1',
-               bgaudio=False, show_xxx=False):
-        res = self._get(self._listing_url(query, categories, active,
-                                          bgaudio, show_xxx))
+    def search(self, query, **kwargs):
+        res = self._get(self.listing_url(query=query, **kwargs))
         items = parse_search_rows(res.text, self.base_url)
         return filter_relevant(items, query), parse_next_page(
             res.text, self.base_url)
 
-    def browse(self, categories, active='1', bgaudio=False, show_xxx=False):
+    def browse(self, categories, **kwargs):
         """Category listing without a text query (same table, same parser)."""
-        res = self._get(self._listing_url(None, categories, active,
-                                          bgaudio, show_xxx))
+        res = self._get(self.listing_url(categories=categories, **kwargs))
         return parse_search_rows(res.text, self.base_url), parse_next_page(
             res.text, self.base_url)
 
@@ -135,11 +146,19 @@ class P2PBGClient:
         return parse_details(res.text, self.base_url, tid)
 
     def download_torrent(self, url):
-        res = self._get(urljoin(self.base_url, url))
+        """Download the .torrent referenced by a details page.
+
+        Returns ``(raw_bytes, error)``; never raises, so the caller can fall
+        back to a magnet link built from the details info-hash.
+        """
+        try:
+            res = self._get(urljoin(self.base_url, url))
+        except Exception as exc:
+            return b'', 'download failed: {}'.format(exc)
         data = res.content
         if not data.startswith(b'd'):
-            raise ValueError('response is not a torrent file')
-        return data
+            return b'', 'response is not a torrent file'
+        return data, ''
 
 
 SHOW_PREVIEW = re.compile(r'''showPreview\(['"]([a-f0-9]{40})['"]\)''')
@@ -177,6 +196,19 @@ def _row_identity(tr):
         title = anchor.get_text(' ', strip=True)
     if tid and title:
         return tid, title
+    # Reference-plugin fallback: the row markup may carry the id only inside
+    # a showPreview('...') call anywhere in the row (onclick, data-* attr).
+    match = SHOW_PREVIEW.search(str(tr))
+    if match:
+        tid = match.group(1)
+        if not title:
+            for cand in tr.select('a'):
+                text = cand.get_text(' ', strip=True)
+                if text:
+                    title = text
+                    break
+        if title:
+            return tid, title
     return None, ''
 
 

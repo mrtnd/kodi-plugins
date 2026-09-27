@@ -16,11 +16,36 @@ def get_setting(setting_id):
     return ADDON.getSetting(setting_id)
 
 
+def log(message):
+    """Write to kodi.log so failures can be diagnosed on the device."""
+    try:
+        import xbmc
+        xbmc.log('[P2PBG+] {}'.format(message), xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
+def record_error(message):
+    """Remember the last failure so Diagnostics can show it on screen."""
+    try:
+        ADDON.setSetting('last_error', message or '')
+    except Exception:
+        pass
+
+
+def get_last_error():
+    try:
+        return get_setting('last_error')
+    except Exception:
+        return ''
+
+
 def notify(message, title='P2PBG'):
     xbmcgui.Dialog().notification(title, message, xbmcgui.NOTIFICATION_INFO, 4000)
 
 
 def show_blocking(message, title='P2PBG blocked'):
+    log(message)
     xbmcgui.Dialog().ok(title, message)
 
 
@@ -92,6 +117,37 @@ def add_dir_item(title, params, is_folder=True, info=None, art=None):
             pass
     xbmcplugin.addDirectoryItem(handle=HANDLE, url=url, listitem=item,
                                 isFolder=is_folder)
+
+
+def add_play_item(title, params, info=None, art=None):
+    """Flat playable item: pressing it resolves straight into Elementum."""
+    url = build_url(params)
+    item = xbmcgui.ListItem(label=title)
+    item.setProperty('IsPlayable', 'true')
+    if art:
+        try:
+            item.setArt(art)
+        except Exception:
+            pass
+    if info:
+        try:
+            tag = item.getVideoInfoTag()
+            tag.setTitle(info.get('title', title))
+            if info.get('plot'):
+                tag.setPlot(info['plot'])
+            if info.get('imdb'):
+                tag.setIMDBNumber(info['imdb'])
+        except AttributeError:
+            pass
+    xbmcplugin.addDirectoryItem(handle=HANDLE, url=url, listitem=item,
+                                isFolder=False)
+
+
+def resolve_play(uri, title=''):
+    """Resolve a playable URI. No endOfDirectory() may follow this."""
+    item = xbmcgui.ListItem(label=title, path=uri)
+    item.setProperty('IsPlayable', 'true')
+    xbmcplugin.setResolvedUrl(HANDLE, True, item)
 
 
 def end_directory(category=None):

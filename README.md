@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.3.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.5.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -176,16 +176,24 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
   animation, documentary, sports, optional XXX).
 - Search results show seeders/leechers/size plus Bulgarian-subs/audio
   badges and posters; pagination included.
-- Clicking a torrent lists its video files (episode picker for box sets);
-  single-movie torrents play immediately.
+- Every torrent is a **flat playable item**: one click resolves it in
+  Elementum. Nothing ever opens as an empty sub-folder.
+- Each row is enriched from its own details page, so the plot carries
+  release, video stream, year, runtime, genre, IMDb id and file count
+  (box sets included).
 - Settings: tracker username/password (local only), tracker base URL,
   required VPN country code (default `BG`), BG-audio preference, minimum
   seeders, adult-content toggle. All labels ship with an English
   `strings.po`, so the Configure dialog renders on any skin.
-- Playback chain: tracker login (CSRF) → search/details parse → VPN
-  country check (**fail-closed**: mismatch or check failure blocks with a
-  dialog) → `.torrent` fetch → stage in profile → hand local path +
-  file index to Elementum (`play?uri=`). Credentials never leave the
+- Playback chain (same request pattern as the proven reference add-on
+  `plugin.video.p2pbg`): tracker session + CSRF login → details page per
+  torrent → `.torrent` fetch → stage in the profile directory → hand the
+  local path to Elementum (`play?uri=`). If the `.torrent` download fails
+  the add-on falls back to a magnet link built from the details info-hash.
+- The only added behaviour is the **fail-closed VPN country gate** before
+  playback (mismatch or check failure blocks with a dialog) and a
+  **Диагностика** menu entry that shows Elementum presence, VPN state,
+  profile path and the last error on screen. Credentials never leave the
   device; no session data is committed (local page snapshots for
   development live under git-ignored `p2pbg.com/`).
 
@@ -202,6 +210,7 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
 | P2PBG+ playback blocked, wrong country | Connect VPN to the configured country and retry (gate is fail-closed) |
 | P2PBG+ `Install the Elementum add-on first` | Install Elementum (Android build) and open it once |
 | P2PBG+ empty results | Lower minimum seeders, or try another category/title |
+| P2PBG+ item does nothing | Open **Диагностика** in the add-on menu: it shows the VPN state, Elementum presence and the exact last error |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |
 | CI `settings.xml` validation fails | Unknown setting `type`, or numeric label missing from `strings.po` |
