@@ -135,27 +135,32 @@ def _fetch_torrent(client, tid, title=''):
 def list_files(client, tid, title=''):
     """Episode/file picker. Single-video torrents play immediately."""
     from resources.lib.kodi_utils import add_dir_item, end_directory
-    result, error = _fetch_torrent(client, tid, title)
-    if error:
-        show_blocking(error)
+    try:
+        result, error = _fetch_torrent(client, tid, title)
+        if error:
+            show_blocking(error)
+            return
+        _raw, meta = result
+        videos = torrentfile.video_files(torrentfile.file_entries(meta))
+    except Exception as exc:
+        show_blocking('Could not open torrent ({}).'.format(exc))
         return
-    _raw, meta = result
-    videos = torrentfile.video_files(torrentfile.file_entries(meta))
     if not videos:
         show_blocking('No video file inside this torrent.')
         return
     if len(videos) == 1:
         play_torrent(client, tid, title, file_index=videos[0][0])
         return
+    summary = {}
     try:
         summary = client.preview(tid)
     except Exception:
         summary = {}
-    plot = summary.get('plot', '')
+    plot = summary.get('plot', '') if isinstance(summary, dict) else ''
     for index, path, _size in videos:
         name = path.split('/')[-1]
         art = None
-        if summary.get('poster'):
+        if isinstance(summary, dict) and summary.get('poster'):
             art = {'poster': summary['poster'],
                    'thumb': summary['poster'],
                    'fanart': summary['poster']}
