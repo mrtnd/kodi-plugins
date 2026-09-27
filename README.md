@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.6.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.6.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -196,9 +196,16 @@ Behaviour inherited from the reference:
 - Root menu: search (with history screen), latest additions, movies-by-year,
   per-category folders (4K/HD/SD, BG movies/series, TV series, animation,
   documentary, sports, optional XXX).
+- Listing and search URLs mirror the tracker's own search form, because it
+  only honours the filters when the whole query is present:
+  `/torrents?fakeusernameremembered=&fakepasswordremembered=&search=<q>&category=<ids>&active=1[&bgaudio=1]&hidexxx=1`
+  (category ids keep literal `;`, `hidexxx` is `1`/`0`). Verified against the
+  confirmed `Филми HD` URL.
 - Every listing row is enriched from its own details page: release, video
   stream, year, genre, IMDb id, BG-subs/BG-audio badges, poster, size,
-  seeders/leechers, synopsis, plus "next page".
+  seeders/leechers, synopsis, plus "next page". Cells are read at the real
+  column offsets and a malformed row is skipped instead of aborting the
+  listing.
 - Playback: tracker session (UA + `referer` + `host`), CSRF token from the
   homepage, login with `_token`/`returnto`/`uid`/`pwd`, details page per
   torrent for the `download.php` link, staged as

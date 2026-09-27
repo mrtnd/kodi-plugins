@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.6.0" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.6.1" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Rebuilt as a fork of the working plugin.video.p2pbg 2026.09.24.01 (GPL-3.0). Playback hand-off to Elementum is byte-identical to the reference; added on top: fail-closed VPN country gate and a Diagnostics screen.</news>
+        <news>Fixes browsing and search on the current site: listing/search URLs now mirror the tracker's own search form (fake*remembered, search, category, active, bgaudio, hidexxx=1/0), the results table columns are read at their real offsets (size/seeders/leechers), a malformed row can no longer abort a listing, and the search dialog uses xbmcgui.Keyboard. Playback hand-off unchanged.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

@@ -54,6 +54,21 @@ def _function(name):
     raise AssertionError('function {} not found in main.py'.format(name))
 
 
+def _load(*names):
+    """Execute pure helper functions from main.py without importing it.
+
+    main.py logs into the tracker at import time, so the offline-checkable
+    helpers are lifted out of the AST instead.
+    """
+    from bs4 import BeautifulSoup  # noqa: F401  (used by the helpers)
+    import urllib.parse
+    namespace = {'baseurl': 'https://www.p2pbg.com', 'urllib': urllib.parse}
+    for name in names:
+        node = _function(name)
+        exec(compile(ast.Module([node], []), 'main.py', 'exec'), namespace)
+    return namespace
+
+
 class TestForkFidelity(unittest.TestCase):
     def test_elementum_handoff_matches_reference(self):
         source = _source()
@@ -95,6 +110,102 @@ class TestForkFidelity(unittest.TestCase):
                       "getSetting('bg_aud')", "getSetting('xxx')",
                       "getSetting('searchlist')"):
             self.assertNotIn(stale, source, 'stale setting id: ' + stale)
+
+
+class TestListingUrls(unittest.TestCase):
+    """Listing/search URLs must mirror the tracker's own search form."""
+
+    def setUp(self):
+        self.ns = _load('listing_url', 'search_value', 'with_search', 'to_int')
+
+    def test_category_url_matches_confirmed_form(self):
+        url = self.ns['listing_url']('68')
+        self.assertEqual(
+            url,
+            'https://www.p2pbg.com/torrents?fakeusernameremembered=&'
+            'fakepasswordremembered=&search=&category=68&active=1&hidexxx=1')
+
+    def test_form_fields_always_present(self):
+        url = self.ns['listing_url'](self.ns['latest_categories'] if
+                                      'latest_categories' in self.ns else '68')
+        for field in ('fakeusernameremembered=', 'fakepasswordremembered=',
+                      'search=', 'category=', 'active=1', 'hidexxx='):
+            self.assertIn(field, url)
+
+    def test_category_separators_stay_literal(self):
+        url = self.ns['listing_url']('14;15;24')
+        self.assertIn('category=14;15;24', url)
+        self.assertNotIn('%3B', url)
+
+    def test_bgaudio_and_xxx_flags(self):
+        self.assertIn('bgaudio=1', self.ns['listing_url']('68', bgaudio=True))
+        self.assertNotIn('bgaudio', self.ns['listing_url']('68'))
+        self.assertIn('hidexxx=0', self.ns['listing_url']('68', show_xxx=True))
+        self.assertIn('hidexxx=1', self.ns['listing_url']('68'))
+
+    def test_search_value_and_replacement(self):
+        base = self.ns['listing_url']('68;60', bgaudio=True)
+        self.assertEqual(self.ns['search_value'](base), '')
+        searched = self.ns['with_search'](base, 'silo s03')
+        self.assertIn('search=silo s03', searched)
+        self.assertIn('category=68;60', searched)
+        self.assertIn('active=1', searched)
+        self.assertIn('hidexxx=1', searched)
+        self.assertEqual(self.ns['search_value'](searched), 'silo s03')
+
+    def test_search_replacement_appends_when_absent(self):
+        self.assertEqual(
+            self.ns['with_search']('https://x/torrents?category=68', 'a'),
+            'https://x/torrents?category=68&search=a')
+
+    def test_to_int_never_raises(self):
+        for value, expected in (('21', 21), ('---', 0), ('', 0), ('  ', 0),
+                                (None, 0), ('1 234', 1234), ('1,024', 1024)):
+            self.assertEqual(self.ns['to_int'](value), expected)
+
+
+class TestRowParsing(unittest.TestCase):
+    """Column layout of the current results table."""
+
+    HTML = ('<table class="torrent-index__table">'
+            '<thead><tr>' + ''.join('<th>%s</th>' % h for h in
+                                    ['Кат', 'Име на файл', 'Свали', 'Ком',
+                                     'Добавен', 'Размер', 'S', 'L', 'D'])
+            + '</tr></thead><tbody>'
+            '<tr><td>x</td><td><a onclick="showPreview(\'' + 'a' * 40 +
+            '\')" href="#">Silo.S03E10.1080p</a></td><td>Свали</td><td>4</td>'
+            '<td>04/09/2026</td><td>8.98 GB</td><td>15</td><td>0</td>'
+            '<td>289</td></tr>'
+            '<tr><td colspan="9">spacer</td></tr>'
+            '</tbody></table>')
+
+    def setUp(self):
+        self.ns = _load('data_row_count', 'find_results_table', 'to_int')
+
+    def test_column_indices(self):
+        play_src = _source()
+        self.assertIn("size = cols[5]", play_src)
+        self.assertIn("seeds = to_int(cols[6]", play_src)
+        self.assertIn("leeches = to_int(cols[7]", play_src)
+        self.assertNotIn("size = cols[6]", play_src)
+
+    def test_rows_shorter_than_nine_cells_are_skipped(self):
+        self.assertIn('if len(cols) < 9:', _source())
+
+    def test_malformed_row_cannot_abort_the_listing(self):
+        index_src = ast.unparse(_function('INDEXPAGES'))
+        self.assertIn("except Exception as exc:", index_src)
+        self.assertIn("Log('row skipped", index_src)
+
+    def test_results_table_prefers_the_full_table(self):
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(
+            '<table class="torrent-index__table '
+            'torrent-index__table--recommended"><tbody>'
+            '<tr><td colspan="9">a</td></tr></tbody></table>'
+            + self.HTML, 'html.parser')
+        table = self.ns['find_results_table'](soup)
+        self.assertEqual(self.ns['data_row_count'](table), 1)
 
 
 class TestVPNGate(unittest.TestCase):

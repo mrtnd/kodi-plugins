@@ -178,23 +178,45 @@ s = requests.Session()
 
 baseurl = 'https://www.p2pbg.com'
 loginurl = '/login'
-categoryurl = baseurl + '/torrents?category='
 subpage = baseurl + '/torrents/'
+
+# Categories for "Последно добавени" (video sets, sports, series).
+latest_categories = '1;5;7;11;14;15;16;17;18;24;34;35;38;58;59;60;51;57'
+
+
+def listing_url(categories, search='', bgaudio=False, show_xxx=False):
+    """Listing/search URL in the exact shape of the site's search form.
+
+    The tracker only honours the filters when the whole form query is
+    present (fake*remembered fields, search, category, active, bgaudio,
+    hidexxx), and hidexxx is a boolean flag (1/0), not on/off.
+    """
+    url = (baseurl + '/torrents?fakeusernameremembered=&fakepasswordremembered=&search='
+           + search + '&category=' + categories + '&active=1')
+    if bgaudio:
+        url += '&bgaudio=1'
+    return url + '&hidexxx=' + ('0' if show_xxx else '1')
+
+
+def to_int(text):
+    """Never raise on '---' or empty cells; a dead row must not kill the
+    whole listing (Kodi then keeps showing the previous menu)."""
+    try:
+        return int(str(text).replace('\u00a0', '').replace(' ', '')
+                   .replace(',', '').strip())
+    except (TypeError, ValueError):
+        return 0
 
 bgsubs_flags = ["subs.gif","torrent-flag-subs-in-torrent.png","torrent-flag-external-subs.png","torrent-flag-subs-in-video.png"]
 bgaudio_flags = ["bgaudio.gif","torrent-flag-bg-audio.png"]
-
-url_prefix = '/torrents?category=1;5;7;11;14;15;16;17;18;24;34;35;38;58;59;60;51;57'
-url_suffix = '&active=1&hidexxx='
 
 if xxx == True:
     __categories__ += [
         {'cat_ids': '13;48;53;54', 'cat_name': u'XXX'}
     ]
+    latest_categories += ';13;48;53;54'
 
-    torrentsurl = baseurl + url_prefix + ';13;48;53;54' + url_suffix + 'off' + bs
-else:
-    torrentsurl = baseurl + url_prefix + url_suffix + 'on' + bs
+torrentsurl = listing_url(latest_categories, bgaudio=(bs != ''), show_xxx=xxx)
 
 # взимаме token
 r = s.get(baseurl, headers=headers_new)
@@ -218,19 +240,68 @@ r = s.post(baseurl + loginurl, data=values, headers=headers_new)
 def CATEGORIES():
     FilmiYear = int(datetime.now().date().strftime("%Y"))
 
-    addDir(u'Търсене', torrentsurl + '&search=', 5, '', __icon_search__)
+    addDir(u'Търсене', torrentsurl, 5, '', __icon_search__)
     addDir(u'Последно добавени', torrentsurl, 1, '', __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear) + u' година', torrentsurl + '&search=' + str(FilmiYear), 1, '',
+    addDir(u'Филми от ' + str(FilmiYear) + u' година',
+           listing_url(latest_categories, search=str(FilmiYear),
+                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
            __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear - 1) + u' година', torrentsurl + '&search=' + str(FilmiYear - 1), 1, '',
+    addDir(u'Филми от ' + str(FilmiYear - 1) + u' година',
+           listing_url(latest_categories, search=str(FilmiYear - 1),
+                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
            __icon_folders__)
-    addDir(u'Филми от ' + str(FilmiYear - 2) + u' година', torrentsurl + '&search=' + str(FilmiYear - 2), 1, '',
+    addDir(u'Филми от ' + str(FilmiYear - 2) + u' година',
+           listing_url(latest_categories, search=str(FilmiYear - 2),
+                       bgaudio=(bs != ''), show_xxx=xxx), 1, '',
            __icon_folders__)
 
     for cat in __categories__:
-        addDir(cat['cat_name'], categoryurl + cat['cat_ids'] + bs, 1, '', __icon_folders__)
+        addDir(cat['cat_name'],
+               listing_url(cat['cat_ids'], bgaudio=(bs != ''), show_xxx=xxx),
+               1, '', __icon_folders__)
 
     addDir('Диагностика', 'diagnostics', 7, '', __icon_folders__)
+
+
+def data_row_count(table):
+    """Rows that look like real torrent rows (9 cells)."""
+    return sum(1 for row in table.find_all('tr')
+               if len(row.find_all('td')) >= 9)
+
+
+def find_results_table(soup):
+    """The results table, not the 'recommended' block above it.
+
+    The proven exact match first; if the site changes attributes, fall back
+    to the torrent-index table holding the most torrent rows.
+    """
+    exact = next(
+        (
+            t for t in soup.find_all("table")
+            if t.get("width") == "100%"
+               and t.get("class") == ["lista"]
+               and len(t.attrs) == 2
+        ),
+        None
+    )
+    if exact:
+        return exact
+    exact = next(
+        (
+            t for t in soup.find_all("table")
+            if t.get("class") == ["torrent-index__table"]
+               and len(t.attrs) == 1
+        ),
+        None
+    )
+    if exact:
+        return exact
+    candidates = [t for t in soup.find_all("table")
+                  if t.get("class") and 'torrent-index__table' in t.get("class")
+                  and data_row_count(t)]
+    if not candidates:
+        return None
+    return max(candidates, key=data_row_count)
 
 
 def INDEXPAGES(name, url):
@@ -242,193 +313,185 @@ def INDEXPAGES(name, url):
 
     soup = BeautifulSoup(data, 'html.parser')
 
-    target_table = next(
-        (
-            t for t in soup.find_all("table")
-            if t.get("width") == "100%"
-               and t.get("class") == ["lista"]
-               and len(t.attrs) == 2
-        ),
-        None
-    )
-
-    if not target_table:
-        target_table = next(
-            (
-                t for t in soup.find_all("table")
-                if t.get("class") == ["torrent-index__table"]
-                   and len(t.attrs) == 1
-            ),
-            None
-        )
+    target_table = find_results_table(soup)
 
     if target_table:
         rows = target_table.find_all("tr")
 
         for row in rows:
-            desk = ''
-            imdb_id = ''
+            # One malformed row must never abort the listing: Kodi
+            # keeps the previous directory on screen otherwise.
+            try:
+                desk = ''
+                imdb_id = ''
 
-            cols = row.find_all("td")
+                cols = row.find_all("td")
 
-            if len(cols) < 3:
-                continue
+                if len(cols) < 9:
+                    continue
 
-            # Magnet
-            #magnet_tag = cols[1].find("a", href=True)
+                # Magnet
+                #magnet_tag = cols[1].find("a", href=True)
 
-            magnet = None
-            #for a in cols[1].find_all("a", href=True):
-            #    if "magnet:?" in a["href"]:
-            #        magnet = a["href"]
-            #        break
+                magnet = None
+                #for a in cols[1].find_all("a", href=True):
+                #    if "magnet:?" in a["href"]:
+                #        magnet = a["href"]
+                #        break
 
-            #if not magnet:
-            #    continue
+                #if not magnet:
+                #    continue
 
-            # Линк "Свали"
-            #download = cols[2].find("a")["href"]
+                # Линк "Свали"
+                #download = cols[2].find("a")["href"]
 
-            #if not download:
-            #    continue
-            download_match = re.search(r"showPreview\('(.+?)'", str(row))
-            if not download_match:
-                continue
+                #if not download:
+                #    continue
+                download_match = re.search(r"showPreview\('(.+?)'", str(row))
+                if not download_match:
+                    continue
 
-            download = subpage + download_match.group(1)
+                download = subpage + download_match.group(1)
 
-            # --- IMDB ID и описание на филма/сериала ---
-            r_page = s.get(download, headers=headers_new)
-            data_page = r_page.text
+                # --- IMDB ID и описание на филма/сериала ---
+                r_page = s.get(download, headers=headers_new)
+                data_page = r_page.text
 
-            match_imdb_id = re.search(u'imdb.+?(tt.+?)/', data_page)
-            if match_imdb_id:
-                imdb_id = match_imdb_id.group(1)
+                match_imdb_id = re.search(u'imdb.+?(tt.+?)/', data_page)
+                if match_imdb_id:
+                    imdb_id = match_imdb_id.group(1)
 
-            magnet_match = re.search('https://www.p2pbg.com/download.php.+?.torrent', data_page)
+                magnet_match = re.search('https://www.p2pbg.com/download.php.+?.torrent', data_page)
 
-            if not magnet_match:
-                continue
+                if not magnet_match:
+                    continue
 
-            torrent_url = magnet_match.group(0)
+                torrent_url = magnet_match.group(0)
 
-            # Заглавие на английски
-            # match_eng = re.search(u'Заглавие на Английски.+?fieldValue">(.+?)<', data_page)
-            # if match_eng:
-            #    title = match_eng.group(1)
-            # else:
-            title = cols[1].find("a", onclick=True).get_text(strip=True)
+                # Заглавие на английски
+                # match_eng = re.search(u'Заглавие на Английски.+?fieldValue">(.+?)<', data_page)
+                # if match_eng:
+                #    title = match_eng.group(1)
+                # else:
+                title_anchor = cols[1].find("a", onclick=True)
+                if title_anchor is None:
+                    continue
+                title = title_anchor.get_text(' ', strip=True)
 
-            # --- Година на филма ---
-            match_year = re.search(r'Година.+?(\d{4})', data_page)
-            if match_year:
-                year = match_year.group(1)
-            else:
-                year = ''
+                # --- Година на филма ---
+                match_year = re.search(r'Година.+?(\d{4})', data_page)
+                if match_year:
+                    year = match_year.group(1)
+                else:
+                    year = ''
 
-            # Жанр
-            match_genre = re.search(u'Жанр.+?fieldValue">(.+?)<', data_page)
+                # Жанр
+                match_genre = re.search(u'Жанр.+?fieldValue">(.+?)<', data_page)
 
-            if not match_genre:
-                match_genre = re.search(u'Жанр.+?class="torrent-preview-fact__value">(.+?)<', data_page)
+                if not match_genre:
+                    match_genre = re.search(u'Жанр.+?class="torrent-preview-fact__value">(.+?)<', data_page)
 
-            if match_genre:
-                genre = match_genre.group(1)
-            else:
-                genre = ''
+                if match_genre:
+                    genre = match_genre.group(1)
+                else:
+                    genre = ''
 
-            # Релийз
-            match_release = re.search(u'Релийз.+?fieldValue">(.+?)<', data_page)
+                # Релийз
+                match_release = re.search(u'Релийз.+?fieldValue">(.+?)<', data_page)
 
-            if not match_release:
-                match_release = re.search(u'Релийз.+?class="torrent-preview-fact__value">(.+?)<', data_page)
+                if not match_release:
+                    match_release = re.search(u'Релийз.+?class="torrent-preview-fact__value">(.+?)<', data_page)
 
-            if match_release:
-                release = match_release.group(1)
-            else:
-                release = ''
+                if match_release:
+                    release = match_release.group(1)
+                else:
+                    release = ''
 
-            # Видео поток
-            match_potok = re.search(u'Видео поток.+?fieldValue">(.+?)<', data_page)
-            if match_potok:
-                potok = match_potok.group(1)
-            else:
-                potok = ''
+                # Видео поток
+                match_potok = re.search(u'Видео поток.+?fieldValue">(.+?)<', data_page)
+                if match_potok:
+                    potok = match_potok.group(1)
+                else:
+                    potok = ''
 
-            # Резюме
-            match_resume = re.search(u'Резюме.+?fieldValue">(.+?)<', data_page)
+                # Резюме
+                match_resume = re.search(u'Резюме.+?fieldValue">(.+?)<', data_page)
 
-            if not match_resume:
-                match_resume = re.search(u'Резюме.+?class="torrent-preview-fact__value">(.+?)<', data_page)
+                if not match_resume:
+                    match_resume = re.search(u'Резюме.+?class="torrent-preview-fact__value">(.+?)<', data_page)
 
-            if match_resume:
-                resume = match_resume.group(1)
-            else:
-                resume = ''
+                if match_resume:
+                    resume = match_resume.group(1)
+                else:
+                    resume = ''
 
-            # SIZE
-            size = cols[6].get_text(strip=True)
+                # SIZE / SEEDS / LEECHES (0 cat, 1 name, 2 download,
+                # 3 comments, 4 date, 5 size, 6 seeds, 7 leeches, 8 snatched)
+                size = cols[5].get_text(' ', strip=True)
 
-            # SEEDS
-            seeds = int(cols[7].get_text(strip=True))
+                # SEEDS / LEECHES - '---' must not raise
+                seeds = to_int(cols[6].get_text(strip=True))
 
-            # LEECHES
-            leeches = int(cols[8].get_text(strip=True))
+                leeches = to_int(cols[7].get_text(strip=True))
 
-            # --- BG Subs ---
-            bg_subs = "Да" if row.find("img", src=lambda x: x and any(x.endswith(s) for s in bgsubs_flags)) else "Не"
+                # --- BG Subs ---
+                bg_subs = "Да" if row.find("img", src=lambda x: x and any(x.endswith(s) for s in bgsubs_flags)) else "Не"
 
-            # --- BG Audio ---
-            bg_audio = "Да" if row.find("img", src=lambda x: x and any(x.endswith(s) for s in bgaudio_flags)) else "Не"
+                # --- BG Audio ---
+                bg_audio = "Да" if row.find("img", src=lambda x: x and any(x.endswith(s) for s in bgaudio_flags)) else "Не"
 
-            if release != '':
-                desk = desk + '[COLOR CC00FF00]Релийз: [/COLOR]' + str(release) + '\n'
+                if release != '':
+                    desk = desk + '[COLOR CC00FF00]Релийз: [/COLOR]' + str(release) + '\n'
 
-            if potok != '':
-                desk = desk + '[COLOR CC00FF00]Видео поток: [/COLOR]' + str(potok) + '\n'
+                if potok != '':
+                    desk = desk + '[COLOR CC00FF00]Видео поток: [/COLOR]' + str(potok) + '\n'
 
-            desk = desk + '[COLOR CC00FF00]Seeders: [/COLOR]' + str(
-                seeds) + ' [COLOR CC00FF00]Leechers: [/COLOR]' + str(leeches) + '\n'
-            desk = desk + '[COLOR CC00FF00]Размер: [/COLOR]' + str(size) + '\n'
+                desk = desk + '[COLOR CC00FF00]Seeders: [/COLOR]' + str(
+                    seeds) + ' [COLOR CC00FF00]Leechers: [/COLOR]' + str(leeches) + '\n'
+                desk = desk + '[COLOR CC00FF00]Размер: [/COLOR]' + str(size) + '\n'
 
-            if year != '':
-                desk = desk + '[COLOR CC00FF00]Година: [/COLOR]' + str(year) + '\n'
+                if year != '':
+                    desk = desk + '[COLOR CC00FF00]Година: [/COLOR]' + str(year) + '\n'
 
-            if genre != '':
-                desk = desk + '[COLOR CC00FF00]Жанр: [/COLOR]' + str(genre) + '\n'
+                if genre != '':
+                    desk = desk + '[COLOR CC00FF00]Жанр: [/COLOR]' + str(genre) + '\n'
 
-            desk = desk + '[COLOR CC00FF00]БГ субтитри: [/COLOR]' + str(bg_subs) + '\n'
-            desk = desk + '[COLOR CC00FF00]БГ аудио: [/COLOR]' + str(bg_audio)
+                desk = desk + '[COLOR CC00FF00]БГ субтитри: [/COLOR]' + str(bg_subs) + '\n'
+                desk = desk + '[COLOR CC00FF00]БГ аудио: [/COLOR]' + str(bg_audio)
 
-            if resume != '':
-                desk = desk + '\n\n[COLOR CC00FF00]Резюме: [/COLOR]' + str(resume)
+                if resume != '':
+                    desk = desk + '\n\n[COLOR CC00FF00]Резюме: [/COLOR]' + str(resume)
 
-            image_url = None
+                image_url = None
 
-            for a in row.find_all("a", onmouseover=True):
-                if "img src=" in a["onmouseover"]:
-                    match = re.search(r"img src=([^ >]+)", a["onmouseover"])
+                for a in row.find_all("a", onmouseover=True):
+                    if "img src=" in a["onmouseover"]:
+                        match = re.search(r"img src=([^ >]+)", a["onmouseover"])
+                        if match:
+                            image_url = match.group(1)
+                            break
+
+                if not image_url:
+                    match = re.search('data-overlib=\'&lt;img src="(.+?)"', str(row))
                     if match:
                         image_url = match.group(1)
-                        break
 
-            if not image_url:
-                match = re.search('data-overlib=\'&lt;img src="(.+?)"', str(row))
-                if match:
-                    image_url = match.group(1)
+                # if bg_subs == 'Да':
+                #    title = title + '[COLOR CC00FF00] | БГ субтитри[/COLOR]'
 
-            # if bg_subs == 'Да':
-            #    title = title + '[COLOR CC00FF00] | БГ субтитри[/COLOR]'
+                # if bg_audio == 'Да':
+                #    title = title + '[COLOR CC00FF00] | БГ аудио[/COLOR]'
 
-            # if bg_audio == 'Да':
-            #    title = title + '[COLOR CC00FF00] | БГ аудио[/COLOR]'
+                #r_magnet = s.get(torrent_url, headers=headers_new)
+                #torrent_data = r_magnet.content
 
-            #r_magnet = s.get(torrent_url, headers=headers_new)
-            #torrent_data = r_magnet.content
+                #magnet = torrent_url_to_magnet(torrent_data, name=title)
 
-            #magnet = torrent_url_to_magnet(torrent_data, name=title)
+                addLink(title, torrent_url, 2, desk, image_url, imdb_id)
 
-            addLink(title, torrent_url, 2, desk, image_url, imdb_id)
+            except Exception as exc:
+                Log('row skipped: %r' % (exc,))
+                continue
 
         # Следваща страница
         next_page = None
@@ -461,28 +524,46 @@ def CLEARHISTORY():
 
 
 # Търсачка
+def search_value(url):
+    """Current value of the search= parameter ('' when absent)."""
+    _head, sep, tail = url.partition('&search=')
+    if not sep:
+        return ''
+    return tail.partition('&')[0]
+
+
+def with_search(url, text=''):
+    """Replace only the search= value.
+
+    The tracker honours the filters only when the whole form query is
+    present (category/active/hidexxx) with literal ';' separators, so the
+    query must not be rebuilt with urlencode.
+    """
+    head, sep, tail = url.partition('&search=')
+    if not sep:
+        return url + ('&search=' + text if text else '')
+    rest = tail.partition('&')
+    return head + '&search=' + text + ('&' + rest[2] if rest[1] else '')
+
+
 def SEARCH(url):
-    search_pos = url.find('&search=')
-    if search_pos != -1:
-        base_url = url[:search_pos + 8]
-        prefill = url[search_pos + 8:]
-    else:
-        base_url = url
-        prefill = ''
+    prefill = search_value(url)
 
     if prefill:
         INDEXPAGES('Търсачка', url)
     else:
-        keyb = xbmc.Keyboard('', 'Търсачка')
+        # xbmcgui.Keyboard, not xbmc.Keyboard (the latter does not exist and
+        # used to raise before the search screen could be shown).
+        keyb = xbmcgui.Keyboard('', 'Търсачка')
         keyb.doModal()
         if keyb.isConfirmed():
             searchText = urllib.parse.quote_plus(keyb.getText())
             searchText = searchText.replace('+', ' ')
-            full_url = base_url + searchText
+            full_url = with_search(url, searchText)
             add_to_history(keyb.getText(), full_url)
             INDEXPAGES('Търсачка', full_url)
         else:
-            SEARCHSCREEN(base_url)
+            SEARCHSCREEN(url)
 
 
 def PLAY(torrent_url, title=''):
