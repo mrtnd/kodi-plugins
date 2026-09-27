@@ -299,6 +299,32 @@ class TestFileSelection(unittest.TestCase):
         self.assertTrue(blocked.called)
 
 
+class TestPreviewParse(unittest.TestCase):
+    PREVIEW_HTML = '''
+    <div><div><button>X</button></div>
+    <div><img src="/posters/abc123.jpg"><img src="/img/flag.png"></div>
+    <div><a href="https://www.youtube.com/watch?v=ABCDEFGHIJK">trailer</a></div>
+    <div>Име на торента | Silo S03 PACK | Жанр | Action; Драма |
+    Режисьор | Graham Yost | Година | 2023 |
+    Резюме | Бункер под земята. In a ruined future, tho.</div></div>
+    '''
+
+    def test_fields(self):
+        from resources.lib.p2pbg import _compose_plot, parse_preview
+        out = parse_preview(self.PREVIEW_HTML, 'https://www.p2pbg.com')
+        self.assertEqual(out['poster'],
+                         'https://www.p2pbg.com/posters/abc123.jpg')
+        self.assertIn('youtube.com/watch', out['trailer'])
+        self.assertEqual(out['fields'].get('Година'), '2023')
+        self.assertIn('Режисьор: Graham Yost', out['plot'])
+        self.assertIn('Бункер под земята', out['plot'])
+        self.assertEqual(_compose_plot({}), '')
+
+    def test_empty(self):
+        from resources.lib.p2pbg import parse_preview
+        self.assertEqual(parse_preview('', 'https://x')['plot'], '')
+
+
 class TestLogin(unittest.TestCase):
     def test_token_extraction_and_post(self):
         from resources.lib.p2pbg import P2PBGClient

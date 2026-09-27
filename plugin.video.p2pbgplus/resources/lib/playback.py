@@ -147,11 +147,24 @@ def list_files(client, tid, title=''):
     if len(videos) == 1:
         play_torrent(client, tid, title, file_index=videos[0][0])
         return
+    try:
+        summary = client.preview(tid)
+    except Exception:
+        summary = {}
+    plot = summary.get('plot', '')
     for index, path, _size in videos:
         name = path.split('/')[-1]
+        art = None
+        if summary.get('poster'):
+            art = {'poster': summary['poster'],
+                   'thumb': summary['poster'],
+                   'fanart': summary['poster']}
         add_dir_item(name, {'action': 'play', 'id': tid,
                             'title': name, 'file_index': str(index)},
-                     is_folder=False, info={'title': name})
+                     is_folder=False,
+                     info={'title': name, 'plot': plot} if plot
+                     else {'title': name},
+                     art=art)
     end_directory(title or 'Select file')
 
 
