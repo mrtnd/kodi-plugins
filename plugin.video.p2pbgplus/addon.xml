@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.1" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.7.2" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>The main menu can no longer reappear as a nested folder: it is only rendered at the add-on root or via the Меню entry, an unresolvable click reports the error instead, and a listing address is recovered from a mangled query. A failed listing request no longer leaves the previous directory on screen.</news>
+        <news>Browsing keeps working when the TV drops the long request parameters: menu clicks are resolved by their label, unresolvable clicks fall back to the last viewed listing, and only an error is reported when nothing can be resolved. Diagnostics records a longer raw request.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

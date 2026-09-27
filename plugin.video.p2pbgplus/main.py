@@ -577,6 +577,43 @@ def with_search(url, text=''):
     return head + '&search=' + text + ('&' + rest[2] if rest[1] else '')
 
 
+def resolve_label(label):
+    """Best-effort action for a menu click that lost its parameters.
+
+    The label survives even when the long listing URL did not, and together
+    with the settings it is everything the request needs.
+    Returns True when something was rendered.
+    """
+    if not label:
+        return False
+    label = label.strip()
+    if label == 'Меню':
+        CATEGORIES()
+        return True
+    if label == 'Диагностика':
+        DIAGNOSTICS()
+        return True
+    if label == 'Търсене':
+        SEARCHSCREEN(torrentsurl)
+        return True
+    if label == 'Последно добавени':
+        prefs = (bs != '', xxx)
+        INDEXPAGES(label, listing_url(latest_categories, bgaudio=prefs[0],
+                                      show_xxx=prefs[1]))
+        return True
+    year = re.fullmatch(r'Филми от (\d{4}) година', label)
+    if year:
+        INDEXPAGES(label, listing_url(latest_categories, search=year.group(1),
+                                      bgaudio=(bs != ''), show_xxx=xxx))
+        return True
+    for cat in __categories__:
+        if cat['cat_name'] == label:
+            INDEXPAGES(label, listing_url(cat['cat_ids'],
+                                          bgaudio=(bs != ''), show_xxx=xxx))
+            return True
+    return False
+
+
 def SEARCH(url):
     prefill = search_value(url)
 
@@ -725,6 +762,7 @@ def addLink(name, url, mode, plot, iconimage, imdb_id):
     return ok
 
 
+
 params = get_params()
 url = None
 name = None
@@ -763,14 +801,18 @@ try:
 except:
     pass
 
-# What did Kodi actually hand us? Shown by Diagnostics, because a mangled
-# query is the difference between a listing and the root menu reappearing.
-Record('last_call', 'mode=%s url=%s raw=%s'
-       % (mode, (url or '')[:120], (sys.argv[2] if len(sys.argv) > 2 else '')[:200]))
 
 paramstring = sys.argv[2] if len(sys.argv) > 2 else ''
 is_root = not paramstring or len(paramstring) < 2
 recovered = recover_listing_url(paramstring)
+
+# What did Kodi actually hand us? Shown by Diagnostics, because a mangled
+# query is the difference between a listing and the root menu reappearing.
+Record('last_call', 'mode=%s url=%s raw=%s'
+       % (mode, (url or '')[:200], paramstring[:400]))
+
+if not url:
+    url = recovered
 
 if mode == None and is_root:
     # The real add-on root: reopen the last listing, or show the menu once.
@@ -781,18 +823,51 @@ if mode == None and is_root:
         print("")
         CATEGORIES()
 
+elif mode == None:
+    if name and resolve_label(name):
+        pass
+    elif url and '/torrents' in url:
+        INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
+                   url)
+    elif GetSetting('last_listing') and not is_root:
+        # An unresolvable click still shows the last working screen rather
+        # than an error, and never the menu as a nested folder.
+        INDEXPAGES(GetSetting('last_category', 'Последно добавени'),
+                   GetSetting('last_listing'))
+    elif is_root:
+        CATEGORIES()
+    else:
+        Log('unresolvable call: mode=None url=%s raw=%s' % (url, paramstring))
+        Record('last_error', 'unresolvable call: mode=None')
+        Blocked('Cannot open this item (mode=None). Open Диагностика for the '
+                'recorded request.')
+
 elif mode == 9:
-    # Explicit "Меню" entry: the menu is only ever rendered on request, never
-    # as a side effect of a click that could not be resolved.
+    # Explicit "Меню" entry: the menu is only ever rendered on request.
     CATEGORIES()
 
-elif mode == 1 or mode == 4 or mode == 5:
-    if not url and recovered:
-        url = recovered
-    if not url:
-        Blocked('Cannot open this item: no listing address in the request.')
-    elif mode == 5:
-        SEARCHSCREEN(url)
+elif mode == 7:
+    DIAGNOSTICS()
+
+elif mode == 6:
+    CLEARHISTORY()
+
+elif mode == 2:
+    print("" + url)
+    PLAY(url, name or '')
+
+elif mode == 5:
+    SEARCHSCREEN(url or torrentsurl)
+
+elif mode in (1, 4):
+    if not url and name and resolve_label(name):
+        pass
+    elif not url:
+        Log('unresolvable call: mode=%s name=%s raw=%s'
+            % (mode, name, paramstring))
+        Record('last_error', 'unresolvable call: mode=%s' % mode)
+        Blocked('Cannot open this item: no listing address in the request. '
+                'Open Диагностика for the recorded request.')
     elif mode == 4:
         print("" + url)
         SEARCH(url)
@@ -800,27 +875,10 @@ elif mode == 1 or mode == 4 or mode == 5:
         print("" + url)
         INDEXPAGES(name, url)
 
-elif mode == 2:
-    print("" + url)
-    PLAY(url, name or '')
-
-elif mode == 6:
-    CLEARHISTORY()
-
-elif mode == 7:
-    DIAGNOSTICS()
-
-elif recovered:
-    # A click whose mode was lost but whose listing survived: show it.
-    INDEXPAGES(name or GetSetting('last_category', 'Последно добавени'),
-               recovered)
-
 else:
-    # Never fall back to the menu here: that is what made every selection
-    # re-render the main menu as a nested folder.
     Log('unresolvable call: mode=%s url=%s raw=%s' % (mode, url, paramstring))
-    Blocked('Cannot open this item (mode=%s).' % mode)
-    if not is_root:
-        Record('last_error', 'unresolvable call: mode=%s' % mode)
+    Record('last_error', 'unresolvable call: mode=%s' % mode)
+    Blocked('Cannot open this item (mode=%s). Open Диагностика for the '
+            'recorded request.' % mode)
 
 xbmcplugin.endOfDirectory(int(sys.argv[1]))
