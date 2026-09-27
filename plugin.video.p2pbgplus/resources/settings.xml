@@ -3,12 +3,10 @@
     <category label="30000">
         <setting label="30001" type="text" id="p2pbg_user" default=""/>
         <setting label="30002" type="text" id="p2pbg_password" option="hidden" default=""/>
-        <setting label="30003" type="text" id="base_url" default="https://www.p2pbg.com"/>
     </category>
     <category label="30010">
         <setting label="30011" type="text" id="vpn_country" default="BG"/>
         <setting label="30012" type="bool" id="prefer_bgaudio" default="true"/>
-        <setting label="30013" type="text" id="min_seeders" default="1"/>
         <setting label="30014" type="bool" id="show_xxx" default="false"/>
     </category>
     <category label="30020">

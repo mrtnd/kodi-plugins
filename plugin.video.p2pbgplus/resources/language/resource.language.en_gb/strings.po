@@ -18,10 +18,6 @@ msgctxt "#30002"
 msgid "p2pbg password (local settings only)"
 msgstr "p2pbg password (local settings only)"
 
-msgctxt "#30003"
-msgid "Tracker base URL"
-msgstr "Tracker base URL"
-
 msgctxt "#30010"
 msgid "Streaming"
 msgstr "Streaming"
@@ -33,10 +29,6 @@ msgstr "Required VPN country code (fail-closed)"
 msgctxt "#30012"
 msgid "Prefer Bulgarian audio releases"
 msgstr "Prefer Bulgarian audio releases"
-
-msgctxt "#30013"
-msgid "Minimum seeders"
-msgstr "Minimum seeders"
 
 msgctxt "#30014"
 msgid "Show adult (XXX) categories"

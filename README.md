@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | Movies & TV-Series from fmoviess.org, HLS via InputStream Adaptive |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.5.1` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.6.0` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -171,32 +171,41 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
 
 ### P2PBG+ add-on notes
 
-- Root menu: Search (with history), Latest additions, Movies-by-year,
-  per-category folders (Movies 4K/HD/SD, BG movies/series, TV series,
-  animation, documentary, sports, optional XXX).
-- Search results show seeders/leechers/size plus Bulgarian-subs/audio
-  badges and posters; pagination included.
-- Every torrent is a **flat playable item**: one click resolves it in
-  Elementum. Nothing ever opens as an empty sub-folder.
-- Each row is enriched from its own details page, so the plot carries
-  release, video stream, year, runtime, genre, IMDb id and file count
-  (box sets included).
-- Settings: tracker username/password (local only), tracker base URL,
-  required VPN country code (default `BG`), BG-audio preference, minimum
-  seeders, adult-content toggle. All labels ship with an English
-  `strings.po`, so the Configure dialog renders on any skin.
-- Playback chain (same request pattern as the proven reference add-on
-  `plugin.video.p2pbg`): tracker session + CSRF login → details page per
-  torrent → `.torrent` fetch → stage in the profile directory → hand the
-  bare absolute path to Elementum (`play?uri=`, no `file://` prefix - Elementum
-  rejects that). If the `.torrent` download fails the add-on falls back to a
-  magnet link built from the details info-hash.
-- The only added behaviour is the **fail-closed VPN country gate** before
-  playback (mismatch or check failure blocks with a dialog) and a
-  **Диагностика** menu entry that shows Elementum presence, VPN state,
-  profile path and the last error on screen. Credentials never leave the
-  device; no session data is committed (local page snapshots for
-  development live under git-ignored `p2pbg.com/`).
+**This add-on is a fork of
+[`plugin.video.p2pbg` 2026.09.24.01](http://martinstz.com/_repo/plugin.video.p2pbg/)
+by MartinStZ (GPL-3.0).** `main.py` is that code, kept as close to the original
+as possible, because its Elementum hand-off is the only version confirmed to
+play on the target TV. Do not "improve" the play path: a regression test
+(`test_p2pbg.py::TestForkFidelity`) pins the hand-off lines, and every earlier
+divergence in this repo cost playback in the field.
+
+Added on top of the fork:
+
+- **Fail-closed VPN country gate** (`resources/lib/vpngate.py`) checked before
+  every download; wrong country *or* a failed check blocks with a dialog.
+- **Diagnostics**: a `Диагностика` entry in the root menu shows Elementum
+  presence, the VPN country/state, the profile path, the last URI handed to
+  Elementum and the last error — so failures can be read on the TV instead of
+  guessed at.
+- Setting ids differ from the reference so existing installations keep their
+  credentials: `p2pbg_user`, `p2pbg_password`, `prefer_bgaudio`, `show_xxx`,
+  `vpn_country`, plus hidden `search_history`, `last_error`, `last_play`.
+
+Behaviour inherited from the reference:
+
+- Root menu: search (with history screen), latest additions, movies-by-year,
+  per-category folders (4K/HD/SD, BG movies/series, TV series, animation,
+  documentary, sports, optional XXX).
+- Every listing row is enriched from its own details page: release, video
+  stream, year, genre, IMDb id, BG-subs/BG-audio badges, poster, size,
+  seeders/leechers, synopsis, plus "next page".
+- Playback: tracker session (UA + `referer` + `host`), CSRF token from the
+  homepage, login with `_token`/`returnto`/`uid`/`pwd`, details page per
+  torrent for the `download.php` link, staged as
+  `elementum_temp.torrent` in the profile dir, handed to Elementum as
+  `plugin://plugin.video.elementum/play?uri=<percent-encoded absolute path>`.
+- Credentials never leave the device; nothing session-related is committed
+  (development snapshots live under git-ignored `p2pbg.com/`).
 
 ---
 
@@ -211,7 +220,8 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
 | P2PBG+ playback blocked, wrong country | Connect VPN to the configured country and retry (gate is fail-closed) |
 | P2PBG+ `Install the Elementum add-on first` | Install Elementum (Android build) and open it once |
 | P2PBG+ empty results | Lower minimum seeders, or try another category/title |
-| P2PBG+ item does nothing | Open **Диагностика** in the add-on menu: it shows the VPN state, Elementum presence and the exact last error |
+| P2PBG+ item does nothing | Open **Диагностика** in the add-on menu: VPN state, Elementum presence, profile path, last Elementum URI and last error |
+| P2PBG+ `One or more items failed to play` | Open **Диагностика** and check `Last play:`; Elementum must get a bare absolute path (no `file://`) |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |
 | CI `settings.xml` validation fails | Unknown setting `type`, or numeric label missing from `strings.po` |
