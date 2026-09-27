@@ -48,22 +48,6 @@ class ListItem:
         return self
 
 
-class Keyboard:
-    text = 'silo'
-
-    def __init__(self, default='', title=''):
-        pass
-
-    def doModal(self):
-        pass
-
-    def isConfirmed(self):
-        return True
-
-    def getText(self):
-        return self.text
-
-
 def _install_kodi_stubs(items):
     xbmcplugin = types.ModuleType('xbmcplugin')
     xbmcplugin.setContent = lambda *a, **k: None
@@ -76,16 +60,16 @@ def _install_kodi_stubs(items):
     xbmcgui = types.ModuleType('xbmcgui')
     xbmcgui.NOTIFICATION_INFO = 0
     xbmcgui.ListItem = ListItem
-    xbmcgui.Keyboard = Keyboard
     dialog = types.SimpleNamespace(notification=lambda *a, **k: None,
-                                   ok=lambda *a, **k: None)
+                                   ok=lambda *a, **k: None,
+                                   input=lambda *a, **k: dialog.answer)
+    dialog.answer = ''
     xbmcgui.Dialog = lambda *a, **k: dialog
 
     xbmc = types.ModuleType('xbmc')
     xbmc.LOGINFO = 0
     xbmc.log = lambda *a, **k: None
     xbmc.executebuiltin = lambda *a, **k: None
-    xbmc.Keyboard = None  # the attribute the reference got wrong
 
     class Addon:
         def __init__(self, id='plugin.video.p2pbgplus'):
@@ -218,10 +202,7 @@ class TestNavigation(unittest.TestCase):
         vfs.File = MagicMock(return_value=handle)
 
     def _cancelled_keyboard(self):
-        import sys as _sys
-        _sys.modules['xbmcgui'].Keyboard.isConfirmed = lambda self: False
-        self.addCleanup(setattr, _sys.modules['xbmcgui'].Keyboard,
-                        'isConfirmed', Keyboard.isConfirmed)
+        pass  # Dialog().input defaults to '' (cancelled) in the stubs
 
     def test_search_screen_survives_corrupt_history(self):
         self._history_content('not json{{{')
@@ -234,6 +215,16 @@ class TestNavigation(unittest.TestCase):
         self._cancelled_keyboard()
         items = self.run_plugin('?m=5')
         self.assertEqual(self.folders(items), ['Търсене'])
+
+    def test_search_input_runs_the_search(self):
+        import sys as _sys
+        dialog = _sys.modules['xbmcgui'].Dialog()
+        dialog.answer = 'dark matter'
+        self.addCleanup(setattr, dialog, 'answer', '')
+        items = self.run_plugin('?m=5')
+        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertIn('search=dark+matter', SETTINGS['last_listing'])
+        self.assertIn('category=0', SETTINGS['last_listing'])
 
     def test_search_screen_offers_search(self):
         items = self.run_plugin('?url=%s&mode=5&name=x&iconimage=/x.png'

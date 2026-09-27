@@ -721,12 +721,17 @@ def SEARCH(query=None):
         add_to_history(query)
         INDEXPAGES(u'Търсене: ' + query, search_url(query))
         return
-    # xbmcgui.Keyboard, not xbmc.Keyboard (the latter does not exist and
-    # used to raise before the search screen could be shown).
-    keyb = xbmcgui.Keyboard('', 'Търсене')
-    keyb.doModal()
-    if keyb.isConfirmed() and keyb.getText().strip():
-        SEARCH(keyb.getText().strip())
+    # Dialog().input, not the Keyboard object: simpler, and immune to the
+    # builds where the Keyboard attribute misbehaves.
+    try:
+        text = xbmcgui.Dialog().input(u'Търсене')
+    except Exception as exc:
+        Log('search input failed: %r' % (exc,))
+        Record('last_error', 'search input failed: %r' % (exc,))
+        Blocked('Search input is not available. Open Диагностика for details.')
+        return
+    if text and text.strip():
+        SEARCH(text.strip())
     else:
         SEARCHSCREEN()
 

@@ -192,6 +192,22 @@ jobs:
                 if (e.status !== 404) throw e;
               }
 
+              // Commit messages since the previous release of this addon,
+              // so the release page shows what changed.
+              let changes = '';
+              try {
+                const prev = execSync(
+                  `git tag --list '${addon}-v*' --sort=-creatordate | head -1`,
+                  { encoding: 'utf8' }).trim();
+                const range = prev ? `${prev}..HEAD` : 'HEAD';
+                const log = execSync(
+                  `git log ${range} --max-count=20 --format='%h %s' -- ${addon} README.md`,
+                  { encoding: 'utf8' }).trim();
+                if (log) changes = log.split('\n').map(l => `- ${l}`).join('\n');
+              } catch (e) {
+                console.log(`no commit history for ${tag}: ${e.message}`);
+              }
+
               console.log(`creating release ${tag}`);
               await github.rest.git.createRef({
                 owner, repo, ref: `refs/tags/${tag}`,
@@ -201,8 +217,8 @@ jobs:
                 owner, repo,
                 tag_name: tag,
                 name: tag,
-                generate_release_notes: true,
-                body: `Kodi add-on **${addon}** version **${version}**.\n\nInstall: Kodi → Add-ons → Install from zip → \`${addon}-${version}.zip\``,
+                body: `Kodi add-on **${addon}** version **${version}**.\n\nInstall: Kodi → Add-ons → Install from zip → \`${addon}-${version}.zip\`` +
+                  (changes ? `\n\n### Changes\n${changes}` : ''),
               });
               created.push(tag);
             }

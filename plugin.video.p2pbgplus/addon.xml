@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.8.2" provider-name="Community">
+<addon id="plugin.video.p2pbgplus" name="P2PBG+ Torrents" version="0.8.3" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.25.1"/>
@@ -15,7 +15,7 @@
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <source>https://github.com/mrtnd/kodi-plugins</source>
-        <news>Search hardening: a corrupt search-history file can no longer crash the search screen, every menu item carries its label for recovery, and any unexpected failure now reports the actual error with the recorded request instead of Kodi’s generic message.</news>
+        <news>Search input uses the standard text dialog instead of the Keyboard object, and a corrupt search history can no longer break the search screen. Release pages now list the commit messages since the previous release.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>
