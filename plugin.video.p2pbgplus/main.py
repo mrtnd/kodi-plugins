@@ -61,19 +61,19 @@ def _first_run_check():
 
 
 def _catalog_url(spec):
-    from urllib.parse import urlencode
     prefs = _prefs()
-    params = {'active': '1', 'hidexxx': 'off' if prefs['show_xxx'] else 'on'}
-    if prefs['bgaudio']:
-        params['bgaudio'] = '1'
+    active = '1'
+    hide = 'off' if prefs['show_xxx'] else 'on'
+    extra = '&bgaudio=1' if prefs['bgaudio'] else ''
     if spec == 'latest':
         base = '/torrents'
     elif spec.startswith('cat:'):
-        params['category'] = spec[4:]
-        base = '/torrents'
+        return '{}?category={}&active={}&hidexxx={}{}'.format(
+            _client().base_url + '/torrents', spec[4:], active, hide, extra)
     else:
         return spec  # next-page absolute URL
-    return _client().base_url + base + '?' + urlencode(params)
+    return '{}?active={}&hidexxx={}{}'.format(
+        _client().base_url + base, active, hide, extra)
 
 
 def search_menu():

@@ -111,6 +111,24 @@ class TestSearchParse(unittest.TestCase):
         for want in ['68', '60', '14', '24', '5', '57']:
             self.assertIn(want, ids)
 
+    def test_listing_url_keeps_separators(self):
+        from resources.lib.p2pbg import P2PBGClient
+        client = P2PBGClient()
+        url = client._listing_url('silo s03', bgaudio=True)
+        self.assertIn('category=68;60;67;34;14;24', url)
+        self.assertIn('bgaudio=1', url)
+        self.assertIn('search=silo s03', url)
+        self.assertNotIn('%3B', url)
+
+    def test_filter_relevant(self):
+        from resources.lib.p2pbg import filter_relevant
+        items = [{'title': 'Silo S03 1080p'}, {'title': 'Gentlemen S02'},
+                 {'title': 'Silo S02 720p'}]
+        out = filter_relevant(items, 'silo')
+        self.assertEqual(len(out), 2)
+        self.assertEqual(filter_relevant(items, 'zzz-no-match'), items)
+        self.assertEqual(len(filter_relevant(items, '')), 3)
+
 
 class TestDetailsParse(unittest.TestCase):
     def test_details(self):

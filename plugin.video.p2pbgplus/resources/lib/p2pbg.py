@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -99,23 +99,33 @@ class P2PBGClient:
         return self._get(url).text
 
     # -- search -------------------------------------------------------
+    def _listing_url(self, query=None, categories=DEFAULT_CATEGORIES,
+                     active='1', bgaudio=False, show_xxx=False):
+        """Query string built exactly like the site's own form: literal
+        ';' category separators and raw spaces (NOT urlencode, which turns
+        ';' into %3B and spaces into '+' and the site then ignores filters).
+        """
+        from urllib.parse import quote_plus
+        parts = ['category=' + categories, 'active=' + active,
+                 'hidexxx=' + ('off' if show_xxx else 'on')]
+        if bgaudio:
+            parts.append('bgaudio=1')
+        if query:
+            parts.append('search=' + quote_plus(query).replace('+', ' '))
+        return self.base_url + '/torrents?' + '&'.join(parts)
+
     def search(self, query, categories=DEFAULT_CATEGORIES, active='1',
                bgaudio=False, show_xxx=False):
-        params = {'search': query, 'category': categories, 'active': active,
-                  'hidexxx': 'off' if show_xxx else 'on'}
-        if bgaudio:
-            params['bgaudio'] = '1'
-        res = self._get(self.base_url + '/torrents?' + urlencode(params))
-        return parse_search_rows(res.text, self.base_url), parse_next_page(
+        res = self._get(self._listing_url(query, categories, active,
+                                          bgaudio, show_xxx))
+        items = parse_search_rows(res.text, self.base_url)
+        return filter_relevant(items, query), parse_next_page(
             res.text, self.base_url)
 
     def browse(self, categories, active='1', bgaudio=False, show_xxx=False):
         """Category listing without a text query (same table, same parser)."""
-        params = {'category': categories, 'active': active,
-                  'hidexxx': 'off' if show_xxx else 'on'}
-        if bgaudio:
-            params['bgaudio'] = '1'
-        res = self._get(self.base_url + '/torrents?' + urlencode(params))
+        res = self._get(self._listing_url(None, categories, active,
+                                          bgaudio, show_xxx))
         return parse_search_rows(res.text, self.base_url), parse_next_page(
             res.text, self.base_url)
 
@@ -259,6 +269,18 @@ def parse_details(html_page, base_url, tid):
     return {'id': tid, 'title': title, 'torrent_url': torrent_url,
             'info_hash': info_hash, 'files': files, 'imdb': imdb,
             'meta': meta}
+
+
+def filter_relevant(items, query):
+    """Client-side relevance guard: the tracker sometimes answers a search
+    with an unfiltered listing. Keep items matching every query word;
+    fall back to the full list when nothing matches (never hide all)."""
+    words = [w.lower() for w in re.split(r'\s+', query or '') if w]
+    if not words:
+        return items
+    matched = [it for it in items
+               if all(w in it.get('title', '').lower() for w in words)]
+    return matched or items
 
 
 def _to_int(text):
