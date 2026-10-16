@@ -8,7 +8,7 @@ Current plugins:
 | Add-on | Kodi ID | Version | Description |
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
-| P2PBG+ | `plugin.video.p2pbgplus` | `0.8.4` | p2pbg.com torrent search + streaming via Elementum, fail-closed VPN country gate |
+| P2PBG+ | `plugin.video.p2pbgplus` | `0.9.0` | p2pbg.com torrent search + streaming via Elementum, VPN country gate, seeders-sorted HD-only listings |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -71,13 +71,15 @@ kodi-plugins/
 │       └── lib/               # scraper.py, resolver.py, kodi_utils.py, ...
 ├── plugin.video.p2pbgplus/    # torrent search add-on (needs Elementum)
 │   ├── addon.xml              # <-- version source of truth
-│   ├── main.py                # router: menu, search, catalog, files, play
+│   ├── main.py                # thin router (query parsing + dispatch)
 │   └── resources/
 │       ├── settings.xml       # tracker creds, base URL, VPN country, filters
 │       ├── language/.../strings.po
-│       └── lib/               # p2pbg.py (tracker client), torrentfile.py
-│                              # (bencode), vpngate.py (country gate),
-│                              # playback.py (Elementum handoff), ...
+│       └── lib/               # p2pbg.py (URLs + HTML parsing, pure),
+│                              # tracker.py (session/client), views.py
+│                              # (menu/listings/search), playback.py
+│                              # (Elementum hand-off), kodi_utils.py
+│                              # (Kodi adapters), vpngate.py (country gate)
 │   └── tests/                 # pytest suite (sanitized fixtures only)
 ├── scripts/
 │   └── build_zip.py           # local build, same logic as CI
@@ -185,17 +187,37 @@ Manual Kodi install from a local build: use the `dist/*.zip` with
 
 **This add-on is a fork of
 [`plugin.video.p2pbg` 2026.09.24.01](http://martinstz.com/_repo/plugin.video.p2pbg/)
-by MartinStZ (GPL-3.0).** `main.py` is that code, kept as close to the original
-as possible, because its Elementum hand-off is the only version confirmed to
-play on the target TV. Do not "improve" the play path: a regression test
-(`test_p2pbg.py::TestForkFidelity`) pins the hand-off lines, and every earlier
-divergence in this repo cost playback in the field.
+by MartinStZ (GPL-3.0).** The Elementum hand-off and the tracker session
+set-up (now in `resources/lib/playback.py` and `resources/lib/tracker.py`)
+are kept byte-for-byte identical to the original, because that hand-off is
+the only version confirmed to play on the target TV. Do not "improve" the
+play path: a regression test (`test_p2pbg.py::TestForkFidelity`) pins the
+hand-off lines, and every earlier divergence in this repo cost playback in
+the field. The rest of the add-on was refactored into small modules:
+
+| Module | Role |
+|---|---|
+| `main.py` | Thin router: parse the query, dispatch to a view |
+| `resources/lib/p2pbg.py` | Pure tracker logic: URL shapes, HTML parsing, filtering, ordering |
+| `resources/lib/tracker.py` | requests session, login, listing/enrichment, torrent fetch |
+| `resources/lib/views.py` | Menu, listings, search and diagnostics screens |
+| `resources/lib/playback.py` | Fail-closed VPN gate + Elementum hand-off |
+| `resources/lib/kodi_utils.py` | Settings, logging, dialogs, history, list items |
 
 Added on top of the fork:
 
 - **Fail-closed VPN country gate** (`resources/lib/vpngate.py`) checked before
   every download; wrong country *or* a failed check blocks with a dialog.
-- **Diagnostics**: a `Диагностика` entry in the root menu shows Elementum
+- **Most-active-first listings**: every category and every search result is
+  sorted by seeders (then leechers), and each row carries a `S:x L:y` badge,
+  so it is obvious at a glance what is hot right now. The tracker form has no
+  server-side sort, so ordering is applied to the parsed rows.
+- **HD only**: 4K/UHD (2160p/3840p) releases are dropped from listings and
+  search, and the dedicated Movies 4K category is gone.
+- **English-only interface**: every menu label, plot field, dialog and
+  notification is English. Bulgarian survives only inside the parser regexes
+  that read the tracker's own Bulgarian HTML.
+- **Diagnostics**: a `Diagnostics` entry in the root menu shows Elementum
   presence, the VPN country/state, the profile path, the last plugin call
   (raw query + parsed mode/url), the last listing URL with the results-table
   state and item count, the last URI handed to Elementum and the last error —
@@ -215,11 +237,11 @@ Added on top of the fork:
 
 Behaviour inherited from the reference:
 
-- Root menu (rebuilt): search with history (over all categories,
-  `category=0`, spaces plus-encoded), Movies HD (`category=68`), Movies 4K
-  (`category=60`), TV shows (`category=14`), TV boxsets (`category=15`), all
-  movies/shows/boxsets via the bare `?category=...` URL, diagnostics.
-  Listings have no menu entry; the remote Back button is enough.
+- Root menu (rebuilt): Search with history (over all categories,
+  `category=0`, spaces plus-encoded), Movies HD (`category=68`), TV shows
+  (`category=14`), TV boxsets (`category=15`), all movies/shows/boxsets via
+  the bare `?category=...` URL, diagnostics. Listings have no menu entry; the
+  remote Back button is enough.
 - Menu items use compact requests (`m`/`c`/`q` keys) instead of embedding the
   whole listing URL, so a click cannot lose its address inside Kodi; any
   failure shows the recorded request on screen.
@@ -233,7 +255,7 @@ Behaviour inherited from the reference:
   only honours the filters when the whole query is present:
   `/torrents?fakeusernameremembered=&fakepasswordremembered=&search=<q>&category=<ids>&active=1[&bgaudio=1]&hidexxx=1`
   (category ids keep literal `;`, `hidexxx` is `1`/`0`). Verified against the
-  confirmed `Филми HD` URL.
+  confirmed `Movies HD` URL.
 - Every listing row is enriched from its own details page: release, video
   stream, year, genre, IMDb id, BG-subs/BG-audio badges, poster, size,
   seeders/leechers, synopsis, plus "next page". Cells are read at the real
@@ -260,8 +282,8 @@ Behaviour inherited from the reference:
 | P2PBG+ playback blocked, wrong country | Connect VPN to the configured country and retry (gate is fail-closed) |
 | P2PBG+ `Install the Elementum add-on first` | Install Elementum (Android build) and open it once |
 | P2PBG+ empty results | Lower minimum seeders, or try another category/title |
-| P2PBG+ item does nothing | Open **Диагностика** in the add-on menu: VPN state, Elementum presence, profile path, last Elementum URI and last error |
-| P2PBG+ `One or more items failed to play` | Open **Диагностика** and check `Last play:`; Elementum must get a bare absolute path (no `file://`) |
+| P2PBG+ item does nothing | Open **Diagnostics** in the add-on menu: VPN state, Elementum presence, profile path, last Elementum URI and last error |
+| P2PBG+ `One or more items failed to play` | Open **Diagnostics** and check `Last play:`; Elementum must get a bare absolute path (no `file://`) |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |
 | CI `settings.xml` validation fails | Unknown setting `type`, or numeric label missing from `strings.po` |

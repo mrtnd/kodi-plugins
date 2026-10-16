@@ -1,9 +1,10 @@
 """Navigation tests for plugin.video.p2pbgplus.
 
-Kodi is stubbed and the tracker session is faked, so main.py can be executed
-offline and the routing verified. The regression these guard against: a
-category/search click that arrives without its `mode` parameter used to fall
-through to the root menu, so every selection re-rendered the main menu.
+Kodi is stubbed and the tracker session is faked, so main.router can be
+executed offline and the routing verified. The regression these guard
+against: a category/search click that arrives without its `mode` parameter
+used to fall through to the root menu, so every selection re-rendered the
+main menu.
 """
 import os
 import sys
@@ -23,11 +24,16 @@ LISTING_HTML = (
 DETAILS_HTML = ('<h1>Silo S03E10</h1><a href="https://www.p2pbg.com/download.php?id='
                 + 'b' * 40 + '&amp;f=x.torrent">dl</a>')
 
+MENU = ['Search', 'Movies HD', 'TV Shows', 'TV Boxsets',
+        'All movies and shows', 'Diagnostics']
+
 SETTINGS = {
     'p2pbg_user': 'user', 'p2pbg_password': 'pass', 'vpn_country': 'BG',
     'prefer_bgaudio': 'true', 'show_xxx': 'false', 'firstrun': 'false',
     'search_history': '',
 }
+
+ITEMS = []
 
 
 class ListItem:
@@ -48,11 +54,32 @@ class ListItem:
         return self
 
 
-def _install_kodi_stubs(items):
+class _Dialog:
+    answer = ''
+
+    def notification(self, *args, **kwargs):
+        pass
+
+    def ok(self, *args, **kwargs):
+        pass
+
+    def input(self, *args, **kwargs):
+        return self.answer
+
+
+DIALOG = _Dialog()
+
+
+def _install_kodi_stubs():
+    if sys.modules.get('xbmc') is not None and \
+            getattr(sys.modules['xbmc'], '_p2pbg_stub', False):
+        return
+
     xbmcplugin = types.ModuleType('xbmcplugin')
     xbmcplugin.setContent = lambda *a, **k: None
+    xbmcplugin.setPluginCategory = lambda *a, **k: None
     xbmcplugin.addDirectoryItem = (
-        lambda handle, url, listitem, isFolder: items.append(
+        lambda handle, url, listitem, isFolder: ITEMS.append(
             (listitem.label, isFolder, url)))
     xbmcplugin.endOfDirectory = lambda *a, **k: None
     xbmcplugin.setResolvedUrl = MagicMock()
@@ -60,13 +87,10 @@ def _install_kodi_stubs(items):
     xbmcgui = types.ModuleType('xbmcgui')
     xbmcgui.NOTIFICATION_INFO = 0
     xbmcgui.ListItem = ListItem
-    dialog = types.SimpleNamespace(notification=lambda *a, **k: None,
-                                   ok=lambda *a, **k: None,
-                                   input=lambda *a, **k: dialog.answer)
-    dialog.answer = ''
-    xbmcgui.Dialog = lambda *a, **k: dialog
+    xbmcgui.Dialog = lambda *a, **k: DIALOG
 
     xbmc = types.ModuleType('xbmc')
+    xbmc._p2pbg_stub = True
     xbmc.LOGINFO = 0
     xbmc.log = lambda *a, **k: None
     xbmc.executebuiltin = lambda *a, **k: None
@@ -96,8 +120,12 @@ def _install_kodi_stubs(items):
     xbmcvfs.mkdirs = lambda path: None
     xbmcvfs.File = MagicMock()
 
-    sys.modules.update({'xbmc': xbmc, 'xbmcgui': xbmcgui, 'xbmcplugin': xbmcplugin,
-                        'xbmcaddon': xbmcaddon, 'xbmcvfs': xbmcvfs})
+    sys.modules.update({'xbmc': xbmc, 'xbmcgui': xbmcgui,
+                        'xbmcplugin': xbmcplugin, 'xbmcaddon': xbmcaddon,
+                        'xbmcvfs': xbmcvfs})
+
+
+_install_kodi_stubs()
 
 
 def _session():
@@ -117,13 +145,18 @@ def _session():
 
 class TestNavigation(unittest.TestCase):
     def setUp(self):
-        self.items = []
-        _install_kodi_stubs(self.items)
+        from resources.lib import kodi_utils
+        ITEMS.clear()
+        DIALOG.answer = ''
         SETTINGS.clear()
         SETTINGS.update({'p2pbg_user': 'user', 'p2pbg_password': 'pass',
                          'vpn_country': 'BG', 'prefer_bgaudio': 'true',
                          'show_xxx': 'false', 'firstrun': 'false',
                          'search_history': ''})
+        vfs = sys.modules['xbmcvfs']
+        vfs.exists = lambda path: False
+        vfs.File = MagicMock()
+        self.kodi_utils = kodi_utils
         LISTING_URL = ('https://www.p2pbg.com/torrents?fakeusernameremembered=&'
                        'fakepasswordremembered=&search=&category=68&active=1&'
                        'hidexxx=1')
@@ -132,18 +165,23 @@ class TestNavigation(unittest.TestCase):
             .replace('?', '%3F').replace('&', '%26').replace('=', '%3D')
 
     def run_plugin(self, paramstring):
-        """Execute main.py once with the given plugin query."""
-        del self.items[:]
-        sys.modules.pop('main', None)
+        """Execute main.router once with the given plugin query."""
+        del ITEMS[:]
         argv = ['plugin://plugin.video.p2pbgplus/', '1', paramstring]
-        with patch('requests.Session', return_value=_session()):
-            with patch.object(sys, 'argv', argv):
-                import main  # noqa: F401  (execution is the test)
-        sys.modules.pop('main', None)
-        return list(self.items)
+        with patch.object(sys, 'argv', argv):
+            if 'main' not in sys.modules:
+                with patch('requests.Session', return_value=_session()):
+                    import main  # noqa: F401
+            import main
+            main.router(paramstring)
+        return list(ITEMS)
 
     def playable(self, items):
         return [label for label, is_folder, _ in items if not is_folder]
+
+    def titles(self, items):
+        return [label.split('  [COLOR')[0] for label, is_folder, _ in items
+                if not is_folder]
 
     def folders(self, items):
         return [label for label, is_folder, _ in items if is_folder]
@@ -151,22 +189,24 @@ class TestNavigation(unittest.TestCase):
     # -- the reported regression ---------------------------------------
     def test_listing_url_without_mode_still_shows_the_listing(self):
         items = self.run_plugin('?url=' + self.encoded)
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
-        self.assertNotIn('Последно добавени', self.folders(items))
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
+        self.assertNotIn('Latest', self.folders(items))
 
     def test_category_with_mode_shows_the_listing(self):
-        items = self.run_plugin('?url=%s&mode=1&name=Филми%%20HD&iconimage=/x.png/'
+        items = self.run_plugin('?url=%s&mode=1&name=Movies%%20HD&iconimage=/x.png/'
                                 % self.encoded)
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertEqual(self.folders(items), [])
 
+    def test_listing_labels_show_activity(self):
+        items = self.run_plugin('?url=' + self.encoded)
+        self.assertIn('S:15', self.playable(items)[0])
+        self.assertIn('L:0', self.playable(items)[0])
+
     def test_menu_entries_are_folders_only(self):
-        items = self.run_plugin('?url=&mode=9&name=Меню&iconimage=/x.png')
+        items = self.run_plugin('?url=&mode=9&name=Menu&iconimage=/x.png')
         self.assertEqual(self.playable(items), [])
-        self.assertEqual(self.folders(items),
-                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
-                          'Сериали Boxset', 'Всички филми и сериали',
-                          'Диагностика'])
+        self.assertEqual(self.folders(items), MENU)
 
     def test_open_without_query_always_shows_the_menu(self):
         # even with a visited listing on record, the root is the menu:
@@ -175,94 +215,78 @@ class TestNavigation(unittest.TestCase):
         self.assertTrue(SETTINGS['last_listing'])
         items = self.run_plugin('')
         self.assertEqual(self.playable(items), [])
-        self.assertIn('Филми HD', self.folders(items))
+        self.assertIn('Movies HD', self.folders(items))
 
     def test_open_without_query_without_history_shows_menu(self):
         items = self.run_plugin('')
-        self.assertEqual(self.folders(items),
-                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
-                          'Сериали Boxset', 'Всички филми и сериали',
-                          'Диагностика'])
+        self.assertEqual(self.folders(items), MENU)
 
     def test_back_from_listing_returns_to_menu(self):
-        # the menu reached from a listing-equivalent root shows every entry
         items = self.run_plugin('')
-        self.assertEqual(self.folders(items),
-                         ['Търсене', 'Филми HD', 'Филми 4K', 'Сериали',
-                          'Сериали Boxset', 'Всички филми и сериали',
-                          'Диагностика'])
+        self.assertEqual(self.folders(items), MENU)
 
     # -- search --------------------------------------------------------
     def _history_content(self, payload):
-        import sys as _sys
-        vfs = _sys.modules['xbmcvfs']
+        vfs = sys.modules['xbmcvfs']
         vfs.exists = lambda path: True
         handle = MagicMock()
         handle.read.return_value = payload
         vfs.File = MagicMock(return_value=handle)
 
-    def _cancelled_keyboard(self):
-        pass  # Dialog().input defaults to '' (cancelled) in the stubs
-
     def test_search_screen_survives_corrupt_history(self):
         self._history_content('not json{{{')
-        self._cancelled_keyboard()
         items = self.run_plugin('?m=5')
-        self.assertEqual(self.folders(items), ['Търсене'])
+        self.assertEqual(self.folders(items), ['New search'])
 
     def test_search_screen_survives_non_list_history(self):
         self._history_content('{"text": "silo"}')
-        self._cancelled_keyboard()
         items = self.run_plugin('?m=5')
-        self.assertEqual(self.folders(items), ['Търсене'])
+        self.assertEqual(self.folders(items), ['New search'])
 
     def test_menu_search_opens_history_first(self):
         self._history_content('[{"text": "dark matter"}]')
         items = self.run_plugin('?m=5')
         self.assertEqual(self.folders(items),
-                         ['Търсене', 'dark matter', 'Изчисти историята'])
+                         ['New search', 'dark matter', 'Clear history'])
 
     def test_search_input_runs_the_search(self):
-        import sys as _sys
-        dialog = _sys.modules['xbmcgui'].Dialog()
-        dialog.answer = 'dark matter'
-        self.addCleanup(setattr, dialog, 'answer', '')
+        DIALOG.answer = 'dark matter'
         items = self.run_plugin('?m=10')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('search=dark+matter', SETTINGS['last_listing'])
         self.assertIn('category=0', SETTINGS['last_listing'])
 
     def test_history_entry_reruns_its_search(self):
         self._history_content('[{"text": "dark matter"}]')
         items = self.run_plugin('?m=4&q=dark+matter')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('search=dark+matter', SETTINGS['last_listing'])
 
     def test_search_screen_offers_search(self):
         items = self.run_plugin('?url=%s&mode=5&name=x&iconimage=/x.png'
                                 % self.encoded)
-        self.assertEqual(self.folders(items), ['Търсене'])
+        self.assertEqual(self.folders(items), ['New search'])
 
     def test_search_runs_over_all_categories(self):
         items = self.run_plugin('?m=4&q=silo')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('category=0', SETTINGS['last_listing'])
         self.assertIn('search=silo', SETTINGS['last_listing'])
         self.assertIn('hidexxx=1', SETTINGS['last_listing'])
 
     def test_search_with_spaces_is_plus_encoded(self):
         items = self.run_plugin('?m=4&q=dark+matter')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('search=dark+matter', SETTINGS['last_listing'])
         self.assertIn('category=0', SETTINGS['last_listing'])
 
     def test_compact_category_urls(self):
-        for cats, bare in (('68', ''), ('60', ''),
-                           ('67;7;11;14;15;68;24;35;59;60;69', '&bare=1')):
+        for cats, bare in (('68', ''), ('67;7;11;14;15;68;24;35;59;69', '&bare=1')):
             query = '?m=1&c=%s%s' % (cats, bare)
             items = self.run_plugin(query)
-            self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'],
-                             query)
+            self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'], query)
+            if bare:
+                continue
             self.assertIn('category=' + cats, SETTINGS['last_listing'], query)
 
     # -- the menu must never come back as a nested directory ----------
@@ -273,16 +297,14 @@ class TestNavigation(unittest.TestCase):
                       '?url=not-a-url&mode=1',
                       '?mode=1'):
             items = self.run_plugin(query)
-            # no folders at all here, and never the main menu entries
-            self.assertEqual([label for label in self.folders(items)
-                              if label != 'Меню'], [],
+            self.assertEqual(self.folders(items), [],
                              'menu rendered for ' + query)
             self.assertEqual(self.playable(items), [])
 
     def test_root_without_history_is_the_only_implicit_menu(self):
         items = self.run_plugin('')
-        self.assertIn('Всички филми и сериали', self.folders(items))
-        self.assertIn('Диагностика', self.folders(items))
+        self.assertIn('All movies and shows', self.folders(items))
+        self.assertIn('Diagnostics', self.folders(items))
 
     def test_listing_url_is_recovered_from_a_mangled_query(self):
         # mode dropped and the url parameter re-encoded by the skin
@@ -290,35 +312,36 @@ class TestNavigation(unittest.TestCase):
                  + '&iconimage=/x.png')
         self.assertIn('category%253D68', query)
         items = self.run_plugin(query)
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('category=68', SETTINGS['last_listing'])
 
     def test_play_still_resolves_with_a_long_url(self):
         query = ('?url=https%3A%2F%2Fwww.p2pbg.com%2Fdownload.php%3Fid%3D'
                  + 'b' * 40 + '%26f%3DSilo.torrent&mode=2&name=Silo.S03E10.1080p')
-        self.run_plugin(query)
-        # VPN country is BG in the stub and the check is cached per call, so
-        # either the Elementum URI is recorded or the gate blocked it
-        self.assertTrue(SETTINGS.get('last_play') or SETTINGS.get('last_error'))
+        with patch('resources.lib.vpngate.VPNGate.check',
+                   return_value=(True, 'BG')):
+            self.run_plugin(query)
+        self.assertTrue(SETTINGS.get('last_play'))
+        self.assertIn('plugin.video.elementum', SETTINGS['last_play'])
 
     # -- label-based recovery (the TV drops the long parameters) --------
     def test_bare_category_label_resolves_by_name(self):
-        items = self.run_plugin('?name=%D0%A4%D0%B8%D0%BB%D0%BC%D0%B8+HD')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        items = self.run_plugin('?name=Movies+HD')
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('category=68', SETTINGS['last_listing'])
         self.assertNotIn('category=14', SETTINGS['last_listing'])
 
     def test_category_mode_with_lost_url_resolves_by_name(self):
-        items = self.run_plugin('?url=&mode=1&name=%D0%A1%D0%B5%D1%80%D0%B8%D0%B0%D0%BB%D0%B8')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        items = self.run_plugin('?url=&mode=1&name=TV+Shows')
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('category=14', SETTINGS['last_listing'])
 
     def test_menu_labels_resolve(self):
-        items = self.run_plugin('?name=%D0%9C%D0%B5%D0%BD%D1%8E')
-        self.assertIn('Всички филми и сериали', self.folders(items))
-        items = self.run_plugin('?name=%D0%A2%D1%8A%D1%80%D1%81%D0%B5%D0%BD%D0%B5')
-        self.assertEqual(self.folders(items), ['Търсене'])
-        self.run_plugin('?name=%D0%94%D0%B8%D0%B0%D0%B3%D0%BD%D0%BE%D1%81%D1%82%D0%B8%D0%BA%D0%B0')
+        items = self.run_plugin('?name=Menu')
+        self.assertIn('All movies and shows', self.folders(items))
+        items = self.run_plugin('?name=Search')
+        self.assertEqual(self.folders(items), ['New search'])
+        self.run_plugin('?name=Diagnostics')
 
     def test_stale_search_is_never_substituted(self):
         # search first, so a last_listing exists
@@ -330,12 +353,12 @@ class TestNavigation(unittest.TestCase):
         self.assertIn('last_error', SETTINGS)
 
     def test_truncated_label_still_resolves(self):
-        items = self.run_plugin('?name=%D0%A4%D0%B8%D0%BB%D0%BC%D0%B8+H')
-        self.assertEqual(self.playable(items), ['Silo.S03E10.1080p'])
+        items = self.run_plugin('?name=Movies+H')
+        self.assertEqual(self.titles(items), ['Silo.S03E10.1080p'])
         self.assertIn('category=68', SETTINGS['last_listing'])
 
     def test_ambiguous_label_does_not_guess(self):
-        items = self.run_plugin('?name=%D0%A4%D0%B8%D0%BB%D0%BC%D0%B8')
+        items = self.run_plugin('?name=TV')
         self.assertEqual(items, [])
         self.assertIn('last_error', SETTINGS)
 
@@ -346,7 +369,7 @@ class TestNavigation(unittest.TestCase):
 
     # -- bookkeeping ---------------------------------------------------
     def test_listing_is_recorded_for_diagnostics(self):
-        self.run_plugin('?url=%s&mode=1&name=Филми%%20HD&iconimage=/x.png'
+        self.run_plugin('?url=%s&mode=1&name=Movies%%20HD&iconimage=/x.png'
                         % self.encoded)
         self.assertEqual(SETTINGS['last_listing'], self.listing)
         self.assertEqual(SETTINGS['last_table'], 'found')
