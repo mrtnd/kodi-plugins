@@ -9,7 +9,7 @@ Current plugins:
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
 | P2PBG+ | `plugin.video.p2pbgplus` | `0.9.0` | p2pbg.com torrent search + streaming via Elementum, VPN country gate, seeders-sorted HD-only listings |
-| FilmiFen+ | `plugin.video.filmifenplus` | `0.3.0` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com homepage mirrored at the root plus Movies, Movies HD and TV Shows with fixed listings, search (with history) and pagination |
+| FilmiFen+ | `plugin.video.filmifenplus` | `0.3.1` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com homepage mirrored at the root plus Movies, Movies HD and TV Shows with fixed listings, search (with history) and pagination |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 

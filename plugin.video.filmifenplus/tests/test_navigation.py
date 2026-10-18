@@ -321,6 +321,26 @@ class TestNavigation(unittest.TestCase):
                                     filmifen.URL_SEARCH))
         self.assertEqual(self.labels(items), ['New search'])
 
+    def test_new_search_entry_opens_the_keyboard(self):
+        # Regression: the "New search" label leaked into the query
+        # parameter, so clicking it searched for the literal text
+        # "New search" (an empty results folder) instead of asking.
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(
+                                    filmifen.URL_SEARCH))
+        entry_query = [url.split('?', 1)[1] for label, _, url in items
+                       if label == 'New search'][0]
+        params = unquote_url('plugin://x?' + entry_query)
+        self.assertNotIn('query', params)
+        self.assertEqual(params['name'], 'New search')
+
+        KEYBOARD_RESULT[0] = 'кари'
+        with patch('resources.lib.http.post',
+                   return_value=fixture('search_page1.html')) as post:
+            results = self.run_plugin(entry_query)
+        self.assertEqual(post.call_args[0][1]['story'], 'кари')
+        self.assertIn('Тензинг', self.labels(results))
+
     def test_search_screen_lists_the_remembered_queries(self):
         FILES[HISTORY_PATH] = json.dumps([{'text': 'кари'},
                                           {'text': 'tenzing'}])

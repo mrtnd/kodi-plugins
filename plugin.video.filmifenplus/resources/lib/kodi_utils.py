@@ -156,22 +156,30 @@ def _item(name, iconimage='', plot='', playable=False):
     return li
 
 
-def _url(mode, url='', name='', plot='', iconimage=''):
-    """Build the plugin query for one directory item."""
-    query = urllib.parse.urlencode({
+def _url(mode, url='', name='', plot='', iconimage='', query=''):
+    """Build the plugin query for one directory item.
+
+    ``query`` is only set by the search screen: MODE_SEARCH_NEW with a
+    query replays it at once, without one asks via the keyboard. It must
+    stay separate from ``name`` (the item label): "New search" is a label,
+    not a query.
+    """
+    params = {
         'url': url or '',
         'mode': mode,
         'name': name or '',
         'plot': plot or '',
         'iconimage': iconimage or '',
-    })
-    return '%s?%s' % (sys.argv[0], query)
+    }
+    if query:
+        params['query'] = query
+    return '%s?%s' % (sys.argv[0], urllib.parse.urlencode(params))
 
 
-def add_dir(name, url, mode, iconimage='', plot=''):
-    """Folder entry (menu entries, listings, next page)."""
+def add_dir(name, url, mode, iconimage='', plot='', query=''):
+    """Folder entry (menu entries, listings, next page, search screen)."""
     return xbmcplugin.addDirectoryItem(
-        handle=HANDLE, url=_url(mode, url, name, plot, iconimage),
+        handle=HANDLE, url=_url(mode, url, name, plot, iconimage, query),
         listitem=_item(name, iconimage), isFolder=True)
 
 

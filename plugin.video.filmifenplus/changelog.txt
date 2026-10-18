@@ -1,3 +1,9 @@
+[B]*** 0.3.1 ***[/B]
+- Fix: on the search screen, "New search" ran a search for the literal
+  text "New search" (an empty folder) instead of opening the keyboard.
+  The query now travels in its own URL parameter; a regression test
+  clicks the real menu item.
+
 [B]*** 0.3.0 ***[/B]
 - Search history: "Search" now opens the search screen first (New search,
   the last 20 queries most-recent-first, Clear history). Replaying a query

@@ -72,7 +72,8 @@ def search_screen():
     for item in history:
         text = item.get('text', '')
         if text:
-            ku.add_dir(text, '', ku.MODE_SEARCH_NEW, ku.SEARCH_ICON)
+            ku.add_dir(text, '', ku.MODE_SEARCH_NEW, ku.SEARCH_ICON,
+                       query=text)
     if history:
         ku.add_dir('Clear history', '', ku.MODE_CLEAR_HISTORY, ku.EMPTY_ICON)
 

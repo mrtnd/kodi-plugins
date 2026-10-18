@@ -76,9 +76,10 @@ def router(paramstring):
             views.search_screen()
 
         elif mode == ku.MODE_SEARCH_NEW:
-            # With a name, the query comes from a history entry (or a saved
-            # favourite); without one the keyboard is shown first.
-            views.search(name or None)
+            # The query travels in its own parameter (a history entry
+            # replays it at once); without one the keyboard is shown. The
+            # item label ("New search") must never become the query.
+            views.search(_unquote(params.get('query')) or None)
 
         elif mode == ku.MODE_CLEAR_HISTORY:
             views.clear_history()
