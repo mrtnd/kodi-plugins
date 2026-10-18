@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Screens: root menu, listings, search and stream selection.
 
-The root menu shows exactly the four entries this fork keeps:
+The root shows exactly the four entries this fork keeps, then mirrors the
+filmifen.com homepage content below them:
 
     Search      -> the site search form (POST)
     Movies      -> https://filmifen.com/filmi/
     Movies HD   -> https://filmifen.com/hd-filmi-onlain/
     TV Shows    -> https://filmifen.com/seriali/
+    ...         -> the same cards (and paging) as https://filmifen.com/
 
 Every other reference entry was removed because it no longer works:
 ``/hd_filmi_onlain/`` and ``/filmi_bg_audio/`` 301-redirect to the
@@ -24,14 +26,31 @@ STREAM_LABEL = 'Stream %d: %s'
 
 
 def menu():
-    """Root menu. Only ever rendered at the add-on root (or on request)."""
-    ku.set_content('files')
+    """Root: the four selections on top, homepage content below."""
+    ku.set_content('movies')
     ku.add_dir('Search', filmifen.URL_SEARCH, ku.MODE_SEARCH, ku.SEARCH_ICON)
     ku.add_dir('Movies', filmifen.URL_MOVIES, ku.MODE_LISTING, ku.MOVIE_ICON)
     ku.add_dir('Movies HD', filmifen.URL_MOVIES_HD, ku.MODE_LISTING,
                ku.MOVIE_ICON)
     ku.add_dir('TV Shows', filmifen.URL_TV_SHOWS, ku.MODE_LISTING,
                ku.MOVIE_ICON)
+    _render_home()
+
+
+def _render_home():
+    """Mirror the filmifen.com front page under the menu.
+
+    The homepage is a fetch away from being empty (offline, site down),
+    so a failure only reports itself and leaves the four entries usable.
+    """
+    try:
+        html = http.get(filmifen.URL_HOME)
+    except Exception as exc:
+        ku.log('homepage fetch failed: %r' % exc)
+        ku.notify('Could not load the homepage content.')
+        return
+    count = _render_cards(html, current_url=filmifen.URL_HOME)
+    ku.log('homepage -> %d items' % count)
 
 
 def listing(url):

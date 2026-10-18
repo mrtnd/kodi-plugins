@@ -22,5 +22,13 @@ msgid "About"
 msgstr ""
 
 msgctxt "#30001"
-msgid "FilmiFen+ is a fork of plugin.video.filmifen 2026.05.05.01 (GPL-3.0). It needs no settings: streams are resolved with script.module.findstreamurl, subtitles are downloaded automatically when the source provides them."
+msgid "FilmiFen+ is a fork of plugin.video.filmifen 2026.05.05.01 (GPL-3.0). Streams are resolved with script.module.findstreamurl; subtitles are downloaded automatically when the source provides them."
+msgstr ""
+
+msgctxt "#30010"
+msgid "Force the InfoWall view on every screen"
+msgstr ""
+
+msgctxt "#30011"
+msgid "InfoWall view id for your skin (Estuary = 54)"
 msgstr ""

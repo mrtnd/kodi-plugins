@@ -38,6 +38,7 @@ class TestUrls(unittest.TestCase):
                          'https://filmifen.com/hd-filmi-onlain/')
         self.assertEqual(filmifen.URL_TV_SHOWS,
                          'https://filmifen.com/seriali/')
+        self.assertEqual(filmifen.URL_HOME, 'https://filmifen.com/')
 
     def test_no_dead_urls_in_the_url_constants(self):
         # The reference menu linked /hd_filmi_onlain/ and /filmi_bg_audio/;
@@ -132,6 +133,16 @@ class TestParseCards(unittest.TestCase):
         movies = filmifen.parse_cards(fixture('listing_movies.html'))
         self.assertEqual(movies[0].display_title, 'Тензинг')
 
+    def test_home_listing_parses_like_any_catalog_page(self):
+        # The filmifen.com front page is the movies catalog itself
+        # (canonical https://filmifen.com/); the root mirrors it.
+        cards = filmifen.parse_cards(fixture('home.html'))
+        self.assertEqual(len(cards), 3)
+        self.assertEqual(cards[0].title, 'Неподозиран възход: Възмездие')
+        self.assertEqual(cards[0].category, 'Екшън')
+        self.assertEqual(cards[1].title, 'Големия план')
+        self.assertEqual(cards[2].title, 'Тензинг')
+
     def test_empty_html_is_handled(self):
         self.assertEqual(filmifen.parse_cards(''), [])
         self.assertEqual(filmifen.parse_cards(None), [])
@@ -154,6 +165,12 @@ class TestPagination(unittest.TestCase):
         self.assertEqual(
             filmifen.parse_next_page(fixture('listing_hd.html')),
             'https://filmifen.com/hd-filmi-onlain/page/2/')
+
+    def test_home_next_page(self):
+        # The homepage pages as /page/N/ (no section prefix).
+        self.assertEqual(
+            filmifen.parse_next_page(fixture('home.html')),
+            'https://filmifen.com/page/2/')
 
     def test_last_page_has_no_next_entry(self):
         self.assertIsNone(
@@ -295,6 +312,7 @@ class TestAgainstFullLivePages(unittest.TestCase):
                               24, '/filmi/'),
         'full_seriali.html': ('https://filmifen.com/seriali/page/2/', 24,
                               '/seriali/'),
+        'full_home.html': ('https://filmifen.com/page/2/', 24, '/filmi/'),
     }
 
     def _full(self, name):

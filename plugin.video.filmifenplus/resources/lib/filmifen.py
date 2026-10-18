@@ -66,6 +66,11 @@ URL_MOVIES_HD = BASE_URL + '/hd-filmi-onlain/'
 URL_TV_SHOWS = BASE_URL + '/seriali/'
 URL_SEARCH = BASE_URL + '/index.php?do=search'
 
+# Site front page. Currently it serves the movies catalog itself
+# (canonical https://filmifen.com/, paged as /page/N/), so the add-on
+# root mirrors it below the menu.
+URL_HOME = BASE_URL + '/'
+
 # Same UA the reference add-on used; the site serves the same markup to it.
 UA = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36')

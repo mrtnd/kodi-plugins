@@ -12,6 +12,10 @@ confirmed on the reference add-on):
 * the root menu re-appeared as a nested folder when a click could not be
   resolved (removed here: failures are reported, the menu is rendered only
   at the add-on root).
+
+The fork also changed the root: the four selections come first, then the
+same content the site homepage shows (the movies catalog, paged as
+``/page/N/``), and every directory gets the InfoWall view by default.
 """
 import os
 import sys
@@ -34,6 +38,8 @@ def fixture(name):
 ITEMS = []
 NOTIFICATIONS = []
 KEYBOARD_RESULT = [None]
+EXECUTED = []
+SETTINGS = {}
 
 MENU = ['Search', 'Movies', 'Movies HD', 'TV Shows']
 
@@ -108,7 +114,7 @@ def _install_kodi_stubs():
     xbmc._filmifenplus_stub = True
     xbmc.LOGINFO = 0
     xbmc.log = lambda *a, **k: None
-    xbmc.executebuiltin = lambda *a, **k: None
+    xbmc.executebuiltin = lambda command, *a, **k: EXECUTED.append(command)
     xbmc.Keyboard = _Keyboard
 
     class Addon:
@@ -116,7 +122,7 @@ def _install_kodi_stubs():
             pass
 
         def getSetting(self, key):
-            return ''
+            return SETTINGS.get(key, '')
 
         def setSetting(self, key, value):
             pass
@@ -156,6 +162,8 @@ class TestNavigation(unittest.TestCase):
     def setUp(self):
         del ITEMS[:]
         del NOTIFICATIONS[:]
+        del EXECUTED[:]
+        SETTINGS.clear()
         KEYBOARD_RESULT[0] = None
 
     def run_plugin(self, paramstring):
@@ -169,20 +177,52 @@ class TestNavigation(unittest.TestCase):
     def labels(self, items):
         return [label for label, is_folder, _ in items]
 
-    def folders(self, items):
-        return [label for label, is_folder, _ in items if is_folder]
-
     def playables(self, items):
         return [label for label, is_folder, _ in items if not is_folder]
 
-    # -- root menu ------------------------------------------------------
-    def test_root_menu_has_only_the_four_working_entries(self):
-        items = self.run_plugin('')
-        self.assertEqual(self.folders(items), MENU)
+    # -- root menu / homepage mirror ------------------------------------
+    def test_root_shows_the_four_selections_first(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            items = self.run_plugin('')
+        self.assertEqual(self.labels(items)[:4], MENU)
         self.assertEqual(self.playables(items), [])
 
+    def test_root_mirrors_the_homepage_content_under_the_menu(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            items = self.run_plugin('')
+        titles = self.labels(items)
+        self.assertIn('Големия план', titles)
+        self.assertIn('Тензинг', titles)
+        # a homepage card opens the stream selection of its title page
+        tenzing = unquote_url([url for label, _, url in items
+                               if label == 'Тензинг'][0])
+        self.assertEqual(tenzing['mode'], '3')
+        self.assertIn('/filmi/', tenzing['url'])
+
+    def test_root_homepage_next_page_continues_the_catalog(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            items = self.run_plugin('')
+        self.assertEqual(self.labels(items)[-1], 'Next page >>')
+        next_page = unquote_url([url for label, _, url in items
+                                 if label == 'Next page >>'][0])
+        self.assertEqual(next_page['mode'], '1')
+        self.assertEqual(next_page['url'], 'https://filmifen.com/page/2/')
+
+    def test_root_survives_homepage_failure(self):
+        with patch('resources.lib.http.get',
+                   side_effect=Exception('offline')):
+            items = self.run_plugin('')
+        self.assertEqual(self.labels(items), MENU)
+        self.assertTrue(any('homepage' in str(args).lower()
+                            for args in NOTIFICATIONS))
+
     def test_root_menu_uses_the_working_section_urls(self):
-        items = self.run_plugin('')
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            items = self.run_plugin('')
         by_label = {label: unquote_url(url) for label, _, url in items}
         self.assertEqual(by_label['Movies']['url'], filmifen.URL_MOVIES)
         self.assertEqual(by_label['Movies HD']['url'],
@@ -190,6 +230,30 @@ class TestNavigation(unittest.TestCase):
         self.assertEqual(by_label['TV Shows']['url'], filmifen.URL_TV_SHOWS)
         self.assertEqual(by_label['TV Shows']['mode'], '1')
         self.assertEqual(by_label['Search']['mode'], '2')
+
+    # -- default InfoWall view -------------------------------------------
+    def test_infowall_view_is_applied_after_a_listing(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('listing_series.html')):
+            query = '?url=%s&mode=1&name=TV%%20Shows' % urllib.parse.quote_plus(
+                filmifen.URL_TV_SHOWS)
+            self.run_plugin(query)
+        self.assertIn('Container.SetViewMode(54)', EXECUTED)
+
+    def test_infowall_view_can_be_disabled(self):
+        SETTINGS['view_infowall'] = 'false'
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            self.run_plugin('')
+        self.assertFalse([cmd for cmd in EXECUTED
+                          if cmd.startswith('Container.SetViewMode')])
+
+    def test_infowall_view_id_is_configurable(self):
+        SETTINGS['view_infowall_id'] = '57'
+        with patch('resources.lib.http.get',
+                   return_value=fixture('home.html')):
+            self.run_plugin('')
+        self.assertIn('Container.SetViewMode(57)', EXECUTED)
 
     # -- TV Shows (the reported empty folder) ---------------------------
     def test_tv_shows_listing_renders_series_cards(self):

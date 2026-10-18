@@ -36,6 +36,12 @@ MODE_SEARCH = 2
 MODE_STREAMS = 3
 MODE_PLAY = 4
 
+# Kodi has no add-on-level default view; the view is a skin concept, so
+# the id depends on the skin. 54 is Estuary's InfoWall
+# (View_54_InfoWall.xml, "Media info"). The id is configurable in the
+# add-on settings for other skins.
+VIEW_INFO_WALL = 54
+
 
 def log(message):
     try:
@@ -122,8 +128,46 @@ def set_content(content='movies'):
         pass
 
 
+def _setting_bool(key, default):
+    try:
+        return ADDON.getSettingBool(key)
+    except AttributeError:
+        value = (ADDON.getSetting(key) or '').strip().lower()
+        return default if not value else value == 'true'
+
+
+def _default_view_id():
+    """Configured InfoWall id, or None when the user disabled the view."""
+    if not _setting_bool('view_infowall', True):
+        return None
+    raw = ''
+    try:
+        raw = (ADDON.getSetting('view_infowall_id') or '').strip()
+    except Exception:
+        pass
+    try:
+        return int(raw) if raw else VIEW_INFO_WALL
+    except ValueError:
+        return VIEW_INFO_WALL
+
+
+def apply_default_view():
+    """Force the InfoWall view on the directory that just closed.
+
+    Executed right after endOfDirectory, because Kodi only accepts a view
+    switch for a container that is already listing.
+    """
+    view_id = _default_view_id()
+    if view_id is None:
+        return
+    try:
+        xbmc.executebuiltin('Container.SetViewMode(%d)' % view_id)
+    except Exception:
+        pass
+
+
 def end_directory(cache_to_disc=True):
-    """Close the directory.
+    """Close the directory and apply the default view.
 
     ``cache_to_disc=False`` for live listings: Kodi must never serve a
     stale copy when the user revisits a section.
@@ -132,3 +176,4 @@ def end_directory(cache_to_disc=True):
         xbmcplugin.endOfDirectory(HANDLE, cacheToDisc=cache_to_disc)
     except Exception:
         pass
+    apply_default_view()

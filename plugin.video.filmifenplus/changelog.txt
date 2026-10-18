@@ -1,3 +1,11 @@
+[B]*** 0.2.0 ***[/B]
+- The root now mirrors the filmifen.com homepage below the menu: the four
+  selections stay on top, followed by the homepage's movie cards and its
+  "Next page" (the site front page is the movies catalog, paged /page/N/).
+  If the homepage cannot be fetched, the menu still works.
+- New setting: force the InfoWall view on every screen (default on;
+  Estuary view id 54, configurable for other skins).
+
 [B]*** 0.1.1 ***[/B]
 - Internal refactor, no behaviour change: listing cards are now a Card
   dataclass (card.display_title / card.plot(description)).

@@ -9,7 +9,7 @@ Current plugins:
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
 | P2PBG+ | `plugin.video.p2pbgplus` | `0.9.0` | p2pbg.com torrent search + streaming via Elementum, VPN country gate, seeders-sorted HD-only listings |
-| FilmiFen+ | `plugin.video.filmifenplus` | `0.1.1` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com Movies, Movies HD and TV Shows with fixed listings, search and pagination |
+| FilmiFen+ | `plugin.video.filmifenplus` | `0.2.0` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com homepage mirrored at the root plus Movies, Movies HD and TV Shows with fixed listings, search and pagination |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -96,7 +96,7 @@ kodi-plugins/
 │   ├── addon.xml              # <-- version source of truth
 │   ├── main.py                # thin router (query parsing + dispatch)
 │   └── resources/
-│       ├── settings.xml       # about box only (no required settings)
+│       ├── settings.xml       # InfoWall view default + about box
 │       ├── language/resource.language.en_gb/strings.po
 │       └── lib/               # filmifen.py (URLs + HTML parsing, pure),
 │                              # http.py (session), views.py
@@ -320,6 +320,13 @@ to the reference, because that is the only version confirmed to play with
 
 - Root menu: **Search**, **Movies** (`/filmi/`), **Movies HD**
   (`/hd-filmi-onlain/`), **TV Shows** (`/seriali/`) — nothing else.
+- The root then mirrors the filmifen.com homepage below the four entries:
+  the same cards and the same "Next page" (`/page/2/`, `/page/3/`…). The
+  site front page currently serves the movies catalog itself, so no TV
+  Shows appear there; a homepage fetch failure leaves the menu usable.
+- The **InfoWall** view is applied by default on every screen (Kodi view
+  ids are skin-specific; 54 is Estuary's InfoWall, configurable in the
+  add-on settings, or switchable off).
 - Search posts the site's own form (`do=search`/`subaction=search`/
   `story=<query>`); results include movies and series, and paging works.
 - Series rows show the season/episode badge (`Кари (Се 1 • Еп 8)`) because
@@ -352,9 +359,9 @@ python3 -m pytest plugin.video.filmifenplus/tests -v
 
 The committed fixtures are fragments trimmed from live captures. For a
 deep check, drop full captures into `tests/fixtures/` as
-`full_filmi.html`, `full_hdfilmi.html`, `full_seriali.html` —
-`TestAgainstFullLivePages` then verifies every card (24 per page) and
-parses the pagination of each.
+`full_filmi.html`, `full_hdfilmi.html`, `full_seriali.html` and
+`full_home.html` — `TestAgainstFullLivePages` then verifies every card
+(24 per page) and parses the pagination of each.
 
 ---
 
@@ -374,6 +381,8 @@ parses the pagination of each.
 | FilmiFen+ `Resolver missing` | Install `script.module.findstreamurl` (same repos as the original add-on) |
 | FilmiFen+ `No streams found` | The title page listed no players for this title; try another title or stream |
 | FilmiFen+ empty listing / `No items found` | The site layout likely changed — re-capture a page and compare with `resources/lib/filmifen.py` |
+| FilmiFen+ view/art looks wrong on a non-Estuary skin | The InfoWall id is skin-specific — change or disable "Force the InfoWall view" in the add-on settings |
+| FilmiFen+ root has no homepage content | The homepage fetch failed (site down); a notification is shown — the four menu entries still work |
 | FilmiFen+ `No results for "…"` | The site search found nothing; check the spelling (the site's Bulgarian titles differ from English ones) |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |
