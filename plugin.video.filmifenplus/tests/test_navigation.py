@@ -1,0 +1,334 @@
+# -*- coding: utf-8 -*-
+"""Navigation tests for plugin.video.filmifenplus.
+
+Kodi is stubbed and the HTTP layer is faked, so main.router and the views
+can be executed offline. The regressions these guard against (all
+confirmed on the reference add-on):
+
+* TV Shows (``/seriali/``) rendered an empty folder because series cards
+  do not carry the ``item__poster-category`` element the old regex needed;
+* search results dropped every series item and pagination built a garbage
+  URL out of ``javascript:list_submit(N)``;
+* the root menu re-appeared as a nested folder when a click could not be
+  resolved (removed here: failures are reported, the menu is rendered only
+  at the add-on root).
+"""
+import os
+import sys
+import types
+import unittest
+import urllib.parse
+from unittest.mock import MagicMock, patch
+
+ADDON = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, ADDON)
+
+FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures')
+
+
+def fixture(name):
+    with open(os.path.join(FIXTURES, name), encoding='utf-8') as handle:
+        return handle.read()
+
+
+ITEMS = []
+NOTIFICATIONS = []
+KEYBOARD_RESULT = [None]
+
+MENU = ['Search', 'Movies', 'Movies HD', 'TV Shows']
+
+
+class ListItem:
+    def __init__(self, label=None, path=None):
+        self.label = label
+        self.path = path
+        self.subtitles = []
+
+    def setProperty(self, *args, **kwargs):
+        pass
+
+    def setArt(self, *args, **kwargs):
+        pass
+
+    def setInfo(self, *args, **kwargs):
+        pass
+
+    def setSubtitles(self, subtitles):
+        self.subtitles = subtitles
+
+
+class _Dialog:
+    def notification(self, *args, **kwargs):
+        NOTIFICATIONS.append(args)
+
+    def ok(self, *args, **kwargs):
+        pass
+
+    def input(self, *args, **kwargs):
+        return ''
+
+
+DIALOG = _Dialog()
+
+
+class _Keyboard:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def doModal(self):
+        pass
+
+    def isConfirmed(self):
+        return KEYBOARD_RESULT[0] is not None
+
+    def getText(self):
+        return KEYBOARD_RESULT[0] or ''
+
+
+def _install_kodi_stubs():
+    if sys.modules.get('xbmc') is not None and \
+            getattr(sys.modules['xbmc'], '_filmifenplus_stub', False):
+        return
+
+    xbmcplugin = types.ModuleType('xbmcplugin')
+    xbmcplugin.setContent = lambda *a, **k: None
+    xbmcplugin.setPluginCategory = lambda *a, **k: None
+    xbmcplugin.addDirectoryItem = (
+        lambda handle, url, listitem, isFolder: ITEMS.append(
+            (listitem.label, isFolder, url)))
+    xbmcplugin.endOfDirectory = lambda *a, **k: None
+    xbmcplugin.setResolvedUrl = MagicMock()
+
+    xbmcgui = types.ModuleType('xbmcgui')
+    xbmcgui.NOTIFICATION_INFO = 0
+    xbmcgui.ListItem = ListItem
+    xbmcgui.Dialog = lambda *a, **k: DIALOG
+
+    xbmc = types.ModuleType('xbmc')
+    xbmc._filmifenplus_stub = True
+    xbmc.LOGINFO = 0
+    xbmc.log = lambda *a, **k: None
+    xbmc.executebuiltin = lambda *a, **k: None
+    xbmc.Keyboard = _Keyboard
+
+    class Addon:
+        def __init__(self, id='plugin.video.filmifenplus'):
+            pass
+
+        def getSetting(self, key):
+            return ''
+
+        def setSetting(self, key, value):
+            pass
+
+        def getAddonInfo(self, key):
+            return '/tmp/fake_' + key
+
+        def openSettings(self):
+            pass
+
+    xbmcaddon = types.ModuleType('xbmcaddon')
+    xbmcaddon.Addon = Addon
+
+    xbmcvfs = types.ModuleType('xbmcvfs')
+    xbmcvfs.translatePath = lambda path: path
+    xbmcvfs.exists = lambda path: True
+
+    sys.modules.update({'xbmc': xbmc, 'xbmcgui': xbmcgui,
+                        'xbmcplugin': xbmcplugin, 'xbmcaddon': xbmcaddon,
+                        'xbmcvfs': xbmcvfs})
+
+
+_install_kodi_stubs()
+
+from resources.lib import filmifen  # noqa: E402
+from resources.lib import kodi_utils  # noqa: E402
+
+
+def unquote_url(item_url):
+    """Decode the plugin query of one directory item."""
+    query = item_url.split('?', 1)[1]
+    return {key: value[0] for key, value in
+            urllib.parse.parse_qs(query, keep_blank_values=True).items()}
+
+
+class TestNavigation(unittest.TestCase):
+    def setUp(self):
+        del ITEMS[:]
+        del NOTIFICATIONS[:]
+        KEYBOARD_RESULT[0] = None
+
+    def run_plugin(self, paramstring):
+        del ITEMS[:]
+        with patch('sys.argv', ['plugin://plugin.video.filmifenplus/', '1',
+                                paramstring]):
+            import main
+            main.router(paramstring)
+        return list(ITEMS)
+
+    def labels(self, items):
+        return [label for label, is_folder, _ in items]
+
+    def folders(self, items):
+        return [label for label, is_folder, _ in items if is_folder]
+
+    def playables(self, items):
+        return [label for label, is_folder, _ in items if not is_folder]
+
+    # -- root menu ------------------------------------------------------
+    def test_root_menu_has_only_the_four_working_entries(self):
+        items = self.run_plugin('')
+        self.assertEqual(self.folders(items), MENU)
+        self.assertEqual(self.playables(items), [])
+
+    def test_root_menu_uses_the_working_section_urls(self):
+        items = self.run_plugin('')
+        by_label = {label: unquote_url(url) for label, _, url in items}
+        self.assertEqual(by_label['Movies']['url'], filmifen.URL_MOVIES)
+        self.assertEqual(by_label['Movies HD']['url'],
+                         filmifen.URL_MOVIES_HD)
+        self.assertEqual(by_label['TV Shows']['url'], filmifen.URL_TV_SHOWS)
+        self.assertEqual(by_label['TV Shows']['mode'], '1')
+        self.assertEqual(by_label['Search']['mode'], '2')
+
+    # -- TV Shows (the reported empty folder) ---------------------------
+    def test_tv_shows_listing_renders_series_cards(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('listing_series.html')):
+            query = '?url=%s&mode=1&name=TV%%20Shows' % urllib.parse.quote_plus(
+                filmifen.URL_TV_SHOWS)
+            items = self.run_plugin(query)
+        self.assertIn('Кари (Се 1 • Еп 8)', self.labels(items))
+        self.assertIn('Next page >>', self.labels(items))
+
+    def test_movies_listing_renders_cards_with_plot_and_next_page(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('listing_movies.html')):
+            query = '?url=%s&mode=1&name=Movies' % urllib.parse.quote_plus(
+                filmifen.URL_MOVIES)
+            items = self.run_plugin(query)
+        titles = self.labels(items)
+        self.assertIn('Тензинг', titles)
+        self.assertIn('Next page >>', titles)
+
+        first = unquote_url([url for label, _, url in items
+                             if label == 'Тензинг'][0])
+        self.assertEqual(first['mode'], '3')
+        self.assertIn('Category:', first['plot'])
+        self.assertTrue(first['url'].startswith('https://filmifen.com/'))
+
+        next_page = unquote_url([url for label, _, url in items
+                                 if label == 'Next page >>'][0])
+        self.assertEqual(next_page['url'],
+                         'https://filmifen.com/filmi/page/2/')
+
+    def test_empty_listing_reports_instead_of_showing_nothing(self):
+        with patch('resources.lib.http.get', return_value='<html></html>'):
+            query = '?url=%s&mode=1&name=Movies' % urllib.parse.quote_plus(
+                filmifen.URL_MOVIES)
+            items = self.run_plugin(query)
+        self.assertEqual(items, [])
+        self.assertTrue(NOTIFICATIONS)
+
+    # -- search ---------------------------------------------------------
+    def test_search_posts_the_story_and_renders_both_card_types(self):
+        posted = {}
+
+        def fake_post(url, data):
+            posted['url'] = url
+            posted['data'] = data
+            return fixture('search_page1.html')
+
+        KEYBOARD_RESULT[0] = 'кари'
+        with patch('resources.lib.http.post', side_effect=fake_post):
+            items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                    % urllib.parse.quote_plus(
+                                        filmifen.URL_SEARCH))
+        self.assertEqual(posted['url'], filmifen.URL_SEARCH)
+        self.assertEqual(posted['data'], {'do': 'search',
+                                          'subaction': 'search',
+                                          'story': 'кари'})
+        labels = self.labels(items)
+        self.assertIn('Тензинг', labels)
+        self.assertIn('Кари (Се 1 • Еп 8)', labels)
+
+        next_page = unquote_url([url for label, _, url in items
+                                 if label == 'Next page >>'][0])
+        self.assertEqual(next_page['url'], filmifen.search_page_url('кари', 2))
+
+    def test_search_next_page_recovers_the_story_from_the_url(self):
+        # Page 2 arrives as a plain GET URL; its list_submit(3) link must
+        # still become a working page-3 URL (the list_submit(1) link that
+        # points back to page 1 comes before the current-page span).
+        page2 = filmifen.search_page_url('кари', 2)
+        with patch('resources.lib.http.get',
+                   return_value=fixture('search_page2.html')):
+            query = '?url=%s&mode=1&name=кари' % urllib.parse.quote_plus(page2)
+            items = self.run_plugin(query)
+        next_page = unquote_url([url for label, _, url in items
+                                 if label == 'Next page >>'][0])
+        self.assertEqual(next_page['url'], filmifen.search_page_url('кари', 3))
+
+    def test_empty_search_reports_no_results(self):
+        KEYBOARD_RESULT[0] = 'нищо'
+        with patch('resources.lib.http.post',
+                   return_value='<html></html>'):
+            self.run_plugin('?url=%s&mode=2&name=Search'
+                            % urllib.parse.quote_plus(filmifen.URL_SEARCH))
+        self.assertTrue(any('No results' in str(args)
+                            for args in NOTIFICATIONS))
+
+    def test_cancelled_search_never_renders_the_menu(self):
+        KEYBOARD_RESULT[0] = None
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(filmifen.URL_SEARCH))
+        self.assertEqual(items, [])
+
+    # -- stream selection and play --------------------------------------
+    def test_stream_screen_lists_the_resolvable_players(self):
+        with patch('resources.lib.http.get',
+                   return_value=fixture('title_movie.html')):
+            query = ('?url=%s&mode=3&name=%s&plot=%s&iconimage='
+                     % (urllib.parse.quote_plus(
+                            'https://filmifen.com/filmi/x/14137-tenzing.html'),
+                        urllib.parse.quote_plus('Тензинг'),
+                        urllib.parse.quote_plus('plot')))
+            items = self.run_plugin(query)
+        self.assertEqual(self.playables(items), [
+            'Stream 1: Тензинг', 'Stream 2: Тензинг', 'Stream 3: Тензинг'])
+        streams = [unquote_url(url)['url'] for _, _, url in items]
+        self.assertIn('https://vidon.to/e/M495IPFR1R6R', streams)
+        self.assertIn('https://ok.ru/videoembed/16388013099703', streams)
+
+    def test_play_hands_the_resolved_url_to_kodi(self):
+        set_resolved = sys.modules['xbmcplugin'].setResolvedUrl
+        set_resolved.reset_mock()
+        fake_resolveurl = MagicMock()
+        fake_resolveurl.resolve.return_value = (
+            'https://cdn.example/stream.mp4', '')
+        with patch('resources.lib.playback.resolveurl', fake_resolveurl):
+            self.run_plugin('?url=%s&mode=4&name=Тензинг'
+                            % urllib.parse.quote_plus(
+                                'https://vidon.to/e/M495IPFR1R6R'))
+        fake_resolveurl.resolve.assert_called_once_with(
+            'https://vidon.to/e/M495IPFR1R6R')
+        self.assertEqual(set_resolved.call_count, 1)
+        handle, ok, listitem = set_resolved.call_args[0]
+        self.assertTrue(ok)
+        self.assertEqual(listitem.path, 'https://cdn.example/stream.mp4')
+
+    # -- failure handling ------------------------------------------------
+    def test_unresolvable_call_reports_instead_of_rendering_the_menu(self):
+        items = self.run_plugin('?mode=99&name=Ghost')
+        self.assertEqual(items, [])
+        self.assertTrue(any('Cannot open' in str(args)
+                            for args in NOTIFICATIONS))
+
+    def test_listing_without_url_reports_instead_of_rendering_the_menu(self):
+        items = self.run_plugin('?mode=1&name=Movies')
+        self.assertEqual(items, [])
+        self.assertTrue(any('no URL' in str(args) for args in NOTIFICATIONS))
+
+
+if __name__ == '__main__':
+    unittest.main()

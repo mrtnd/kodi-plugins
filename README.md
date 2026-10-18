@@ -9,11 +9,13 @@ Current plugins:
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
 | P2PBG+ | `plugin.video.p2pbgplus` | `0.9.0` | p2pbg.com torrent search + streaming via Elementum, VPN country gate, seeders-sorted HD-only listings |
+| FilmiFen+ | `plugin.video.filmifenplus` | `0.1.1` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com Movies, Movies HD and TV Shows with fixed listings, search and pagination |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
-**Maintenance status:** `plugin.video.p2pbgplus` is the only actively
-maintained add-on. `plugin.video.fmovies` is **deprecated**: its upstream
+**Maintenance status:** `plugin.video.p2pbgplus` and
+`plugin.video.filmifenplus` are the actively maintained add-ons.
+`plugin.video.fmovies` is **deprecated**: its upstream
 site is gone/broken, it receives no fixes, no version bumps and no releases,
 and changes to it are out of scope. Do not work on it, and ignore it in
 reviews, test runs and release prep.
@@ -48,6 +50,15 @@ reviews, test runs and release prep.
    after watching. Long-term seeding is governed by Elementum's own
    settings (mind your tracker ratio).
 
+### FilmiFen+ only
+
+6. Install **`script.module.findstreamurl`** first (it is the resolver
+   module the original add-on used; it is served by the same repos as
+   `plugin.video.filmifen`, e.g. `martinstz.com/_repo`). The add-on has no
+   settings of its own — browse **Search / Movies / Movies HD / TV Shows**
+   and play a stream; subtitles are fetched automatically when the source
+   provides them.
+
 No build, no Python, no adb needed — the Release zip is the artifact.
 
 ### Update
@@ -81,6 +92,18 @@ kodi-plugins/
 │                              # (Elementum hand-off), kodi_utils.py
 │                              # (Kodi adapters), vpngate.py (country gate)
 │   └── tests/                 # pytest suite (sanitized fixtures only)
+├── plugin.video.filmifenplus/ # filmifen.com streaming add-on (FilmiFen+)
+│   ├── addon.xml              # <-- version source of truth
+│   ├── main.py                # thin router (query parsing + dispatch)
+│   └── resources/
+│       ├── settings.xml       # about box only (no required settings)
+│       ├── language/resource.language.en_gb/strings.po
+│       └── lib/               # filmifen.py (URLs + HTML parsing, pure),
+│                              # http.py (session), views.py
+│                              # (menu/listings/search/streams),
+│                              # playback.py (resolveurl hand-off),
+│                              # kodi_utils.py (Kodi adapters)
+│   └── tests/                 # pytest suite (fixtures trimmed from live pages)
 ├── scripts/
 │   └── build_zip.py           # local build, same logic as CI
 ├── .github/workflows/
@@ -160,6 +183,7 @@ python3 scripts/build_zip.py --addon plugin.video.p2pbgplus --out dist
 # run tests (needs pytest)
 pip install pytest requests beautifulsoup4
 python3 -m pytest plugin.video.p2pbgplus/tests -v
+python3 -m pytest plugin.video.filmifenplus/tests -v
 ```
 
 `plugin.video.fmovies` is deprecated: no builds, no test runs, no releases.
@@ -269,6 +293,69 @@ Behaviour inherited from the reference:
 - Credentials never leave the device; nothing session-related is committed
   (development snapshots live under git-ignored `p2pbg.com/`).
 
+### FilmiFen+ add-on notes
+
+**This add-on is a fork of
+[`plugin.video.filmifen` 2026.05.05.01](http://martinstz.com/_repo/plugin.video.filmifen/)
+by MartinStZ (GPL-3.0).** The whole play path — the stream regexes in
+`resources/lib/filmifen.py` and the resolveurl/subtitle/`setResolvedUrl`
+hand-off in `resources/lib/playback.py` — is kept byte-for-byte identical
+to the reference, because that is the only version confirmed to play with
+`script.module.findstreamurl`. Do not "improve" it: a regression test
+(`tests/test_filmifen.py::TestForkFidelity`) pins the exact lines.
+
+#### What was broken (analysis of the reference against the live site)
+
+| Symptom in the reference add-on | Root cause | Fix in FilmiFen+ |
+|---|---|---|
+| TV Shows (Сериали) opens an **empty folder** | `INDEXPAGES` parsed cards with one regex that required a `div.item__poster-category` element. Series cards on `/seriali/` do not have that element, so **every** card was skipped | Cards are parsed with BeautifulSoup attribute-wise; series cards parse without the category div |
+| Series are missing from search results | Same regex requirement: only movie cards in mixed results matched (e.g. `кари` parsed 9 of 24 rows) | Same fix; a mixed-results regression test covers it |
+| "Most selections don't work" | The menu linked `/hd_filmi_onlain/` and `/filmi_bg_audio/` (the site now 301-redirects both to the homepage) and built the genre entries by scraping `ul.menu__block` with regexes that no longer match the markup | Menu reduced to the three working sections plus Search; dead URLs and scraping are gone |
+| TV Shows has no "next page" | The pagination regex required a literal space after `<span>N</span>`, and series pagination uses relative hrefs without it | Pagination is read from the DOM; relative hrefs are absolutized |
+| Search "next page" never works | Search paginates with `javascript:list_submit(N)`, which the old regex turned into a garbage URL (`#" onclick=...`) | `list_submit(N)` maps to `index.php?do=search&…&search_start=N` — semantics verified live (`search_start=2` → results 25-48); the query is carried across pages |
+| Below-the-fold posters broken | Lazy cards carry a 1×1 `data:` placeholder in `src` and the real image in `data-src`; the old regex used the placeholder | `data-src`/`srcset` fallbacks, never a `data:` URI |
+| Clicking a dead entry re-rendered the menu as a nested folder | The reference rendered the root menu whenever a request could not be resolved | The menu is rendered only at the add-on root; failures are reported on screen |
+
+#### Behaviour of the fork
+
+- Root menu: **Search**, **Movies** (`/filmi/`), **Movies HD**
+  (`/hd-filmi-onlain/`), **TV Shows** (`/seriali/`) — nothing else.
+- Search posts the site's own form (`do=search`/`subaction=search`/
+  `story=<query>`); results include movies and series, and paging works.
+- Series rows show the season/episode badge (`Кари (Се 1 • Еп 8)`) because
+  the site titles every episode with the same name.
+- Stream selection preserves the reference labels (`Stream N: <title>`) and
+  the reference filters (trailer/ads/schema/self-links excluded); resolver
+  playback and subtitle download are unchanged.
+- Listings are never served from Kodi's directory cache
+  (`cacheToDisc=False`).
+- The interface (menu labels, dialogs) is English; site values (titles,
+  categories) stay as the site returns them.
+
+#### Layout
+
+| Module | Role |
+|---|---|
+| `main.py` | Thin router: parse the query, dispatch to a view |
+| `resources/lib/filmifen.py` | Pure site logic: URLs, card/pagination parsing, streams |
+| `resources/lib/http.py` | requests session for filmifen.com (timeout added) |
+| `resources/lib/views.py` | Menu, listings, search, stream selection |
+| `resources/lib/playback.py` | resolveurl + subtitles + `setResolvedUrl` (reference logic) |
+| `resources/lib/kodi_utils.py` | Dialogs, keyboard, list items, directory plumbing |
+
+Run its tests with:
+
+```bash
+pip install pytest requests beautifulsoup4
+python3 -m pytest plugin.video.filmifenplus/tests -v
+```
+
+The committed fixtures are fragments trimmed from live captures. For a
+deep check, drop full captures into `tests/fixtures/` as
+`full_filmi.html`, `full_hdfilmi.html`, `full_seriali.html` —
+`TestAgainstFullLivePages` then verifies every card (24 per page) and
+parses the pagination of each.
+
 ---
 
 ## 5. Troubleshooting
@@ -284,6 +371,10 @@ Behaviour inherited from the reference:
 | P2PBG+ empty results | Lower minimum seeders, or try another category/title |
 | P2PBG+ item does nothing | Open **Diagnostics** in the add-on menu: VPN state, Elementum presence, profile path, last Elementum URI and last error |
 | P2PBG+ `One or more items failed to play` | Open **Diagnostics** and check `Last play:`; Elementum must get a bare absolute path (no `file://`) |
+| FilmiFen+ `Resolver missing` | Install `script.module.findstreamurl` (same repos as the original add-on) |
+| FilmiFen+ `No streams found` | The title page listed no players for this title; try another title or stream |
+| FilmiFen+ empty listing / `No items found` | The site layout likely changed — re-capture a page and compare with `resources/lib/filmifen.py` |
+| FilmiFen+ `No results for "…"` | The site search found nothing; check the spelling (the site's Bulgarian titles differ from English ones) |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |
 | CI `settings.xml` validation fails | Unknown setting `type`, or numeric label missing from `strings.po` |

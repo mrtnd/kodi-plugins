@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.filmifenplus" name="FilmiFen+" version="0.1.1" provider-name="Community">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.findstreamurl" version="2023.07.11.01"/>
+        <import addon="script.module.requests" version="1.1.0"/>
+        <import addon="script.module.beautifulsoup4" version="0.0.1"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">Movies, HD movies and TV shows from filmifen.com</summary>
+        <description lang="en_GB">Fork of plugin.video.filmifen 2026.05.05.01 by MartinStZ (GPL-3.0). Rebuilt for the current filmifen.com markup: working Movies, Movies HD and TV Shows listings, working search and pagination. The resolver hand-off (script.module.findstreamurl) is kept identical to the reference add-on.</description>
+        <disclaimer lang="en_GB">Some parts of this add-on may not be legal in your country of residence - check your local laws before installing. This add-on does not host or distribute any content.</disclaimer>
+        <platform>all</platform>
+        <license>GPL-3.0-only</license>
+        <source>https://github.com/mrtnd/kodi-plugins</source>
+        <news>First release of the fork. TV Shows listing fixed (series cards have no category element), pagination fixed (relative links absolutized, search list_submit handled), search fixed for series results, menu reduced to Search, Movies, Movies HD, TV Shows.</news>
+        <assets>
+            <icon>resources/icon.png</icon>
+            <fanart>resources/fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

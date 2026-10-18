@@ -1,0 +1,25 @@
+[B]*** 0.1.1 ***[/B]
+- Internal refactor, no behaviour change: listing cards are now a Card
+  dataclass (card.display_title / card.plot(description)).
+- Kodi item helpers have uniform signatures and build their queries with
+  urllib.parse.urlencode.
+- HTTP layer now calls raise_for_status() so a failed request is reported
+  instead of looking like an empty page.
+
+[B]*** 0.1.0 ***[/B]
+Fork of plugin.video.filmifen 2026.05.05.01 (GPL-3.0, MartinStZ).
+- Menu reduced to Search, Movies, Movies HD, TV Shows (everything else was
+  removed: /hd_filmi_onlain/ and /filmi_bg_audio/ redirect to the homepage,
+  the year pages are redundant, the scraped genre entries no longer parse).
+- Movies HD now uses https://filmifen.com/hd-filmi-onlain/ (the old
+  /hd_filmi_onlain/ URL 301-redirects to the homepage).
+- TV Shows (https://filmifen.com/seriali/) listing fixed: series cards
+  have no item__poster-category element, so the reference regex skipped
+  every card and the folder rendered empty.
+- Search fixed: series results are no longer dropped, and search paging
+  through list_submit(N) (search_start=N) now works instead of building a
+  garbage URL.
+- Pagination fixed for listings: relative next-page hrefs are absolutized.
+- Series labels show the season/episode badge (all episodes share one title).
+- Playback untouched: same resolveurl call, same setResolvedUrl hand-off,
+  same subtitle handling as the reference add-on.
