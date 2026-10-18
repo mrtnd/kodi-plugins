@@ -4,7 +4,7 @@
 The root shows exactly the four entries this fork keeps, then mirrors the
 filmifen.com homepage content below them:
 
-    Search      -> the site search form (POST)
+    Search      -> the search screen (history + New search)
     Movies      -> https://filmifen.com/filmi/
     Movies HD   -> https://filmifen.com/hd-filmi-onlain/
     TV Shows    -> https://filmifen.com/seriali/
@@ -64,19 +64,44 @@ def listing(url):
                       'please report at the add-on repository.')
 
 
-def search():
-    """Search screen: keyboard, POST to the site's search form, results."""
-    text = ku.keyboard('Search')
-    if text is None:
-        # Cancelled: close the (empty) directory; never re-render the
-        # root menu as a side effect of a cancelled action.
-        ku.log('search cancelled')
-        return
-    story = text.strip()
+def search_screen():
+    """Search screen: New search, the remembered queries, Clear history."""
+    ku.set_content('movies')
+    ku.add_dir('New search', '', ku.MODE_SEARCH_NEW, ku.SEARCH_ICON)
+    history = ku.load_history()
+    for item in history:
+        text = item.get('text', '')
+        if text:
+            ku.add_dir(text, '', ku.MODE_SEARCH_NEW, ku.SEARCH_ICON)
+    if history:
+        ku.add_dir('Clear history', '', ku.MODE_CLEAR_HISTORY, ku.EMPTY_ICON)
+
+
+def clear_history():
+    ku.clear_history()
+
+
+def search(query=None):
+    """Search: keyboard first, unless a query was given (history entry).
+
+    Every query that actually runs is remembered (most recent first, at
+    most :data:`ku.MAX_HISTORY` entries, stored in the add-on profile).
+    """
+    if query:
+        story = query.strip()
+    else:
+        text = ku.keyboard('Search')
+        if text is None:
+            # Cancelled: close the (empty) directory; never re-render the
+            # root menu as a side effect of a cancelled action.
+            ku.log('search cancelled')
+            return
+        story = text.strip()
     if not story:
         ku.notify('Empty search')
         return
 
+    ku.add_to_history(story)
     ku.set_content('movies')
     html = http.post(filmifen.URL_SEARCH, {
         'do': 'search',

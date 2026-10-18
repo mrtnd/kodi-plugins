@@ -73,7 +73,15 @@ def router(paramstring):
                               % (name or 'this item'))
 
         elif mode == ku.MODE_SEARCH:
-            views.search()
+            views.search_screen()
+
+        elif mode == ku.MODE_SEARCH_NEW:
+            # With a name, the query comes from a history entry (or a saved
+            # favourite); without one the keyboard is shown first.
+            views.search(name or None)
+
+        elif mode == ku.MODE_CLEAR_HISTORY:
+            views.clear_history()
 
         elif mode == ku.MODE_STREAMS:
             if url:

@@ -6,6 +6,8 @@ Kodi (tests stub this module's dependencies, not its logic).
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
 import urllib.parse
 
@@ -25,16 +27,25 @@ _ADDON_PATH = xbmcvfs.translatePath(ADDON.getAddonInfo('path'))
 
 SEARCH_ICON = _ADDON_PATH + '/resources/search.png'
 MOVIE_ICON = _ADDON_PATH + '/resources/movie.png'
+EMPTY_ICON = _ADDON_PATH + '/resources/empty.png'
 
 # The reference add-on wrote the subtitle file here; kept identical.
 SUBTITLE_FILE = xbmcvfs.translatePath('special://temp/filmifen.Bulgarian.srt')
 
-# Router modes (must match main.py). Numeric values match the reference
-# add-on so stale favourites/bookmarks keep working after the fork.
+# Router modes (must match main.py). The first four numeric values match
+# the reference add-on so stale favourites/bookmarks keep working after
+# the fork; the search-screen modes are new.
 MODE_LISTING = 1
 MODE_SEARCH = 2
 MODE_STREAMS = 3
 MODE_PLAY = 4
+MODE_SEARCH_NEW = 5
+MODE_CLEAR_HISTORY = 6
+
+# Search history: JSON file in the add-on profile (same scheme as P2PBG+),
+# most recent first, newest entry wins on duplicates.
+HISTORY_FILE = 'search_history.json'
+MAX_HISTORY = 20
 
 # Kodi has no add-on-level default view; the view is a skin concept, so
 # the id depends on the skin. 54 is Estuary's InfoWall
@@ -70,6 +81,65 @@ def keyboard(heading='Search'):
     if keyb.isConfirmed():
         return keyb.getText()
     return None
+
+
+def profile_dir():
+    try:
+        path = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
+    except Exception:
+        path = ''
+    return path
+
+
+def _history_path():
+    return os.path.join(profile_dir(), HISTORY_FILE)
+
+
+def load_history():
+    """Remembered search queries, most recent first."""
+    path = _history_path()
+    try:
+        if not xbmcvfs.exists(path):
+            return []
+        handle = xbmcvfs.File(path, 'r')
+        try:
+            data = json.loads(handle.read())
+        finally:
+            handle.close()
+    except Exception:
+        return []
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return []
+
+
+def save_history(history):
+    profile = profile_dir()
+    try:
+        if profile and not xbmcvfs.exists(profile):
+            xbmcvfs.mkdirs(profile)
+        handle = xbmcvfs.File(_history_path(), 'w')
+        handle.write(json.dumps(history))
+        handle.close()
+    except Exception:
+        log('could not save search history')
+
+
+def add_to_history(text):
+    text = (text or '').strip()
+    if not text:
+        return
+    history = [item for item in load_history() if item.get('text') != text]
+    history.insert(0, {'text': text})
+    save_history(history[:MAX_HISTORY])
+
+
+def clear_history():
+    save_history([])
+    try:
+        xbmc.executebuiltin('Container.Refresh')
+    except Exception:
+        pass
 
 
 def _item(name, iconimage='', plot='', playable=False):

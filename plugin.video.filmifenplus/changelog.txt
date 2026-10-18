@@ -1,3 +1,9 @@
+[B]*** 0.3.0 ***[/B]
+- Search history: "Search" now opens the search screen first (New search,
+  the last 20 queries most-recent-first, Clear history). Replaying a query
+  runs it at once; the history lives in the add-on profile
+  (search_history.json) and never leaves the device.
+
 [B]*** 0.2.0 ***[/B]
 - The root now mirrors the filmifen.com homepage below the menu: the four
   selections stay on top, followed by the homepage's movie cards and its

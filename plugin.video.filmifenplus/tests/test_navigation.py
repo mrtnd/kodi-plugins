@@ -17,6 +17,7 @@ The fork also changed the root: the four selections come first, then the
 same content the site homepage shows (the movies catalog, paged as
 ``/page/N/``), and every directory gets the InfoWall view by default.
 """
+import json
 import os
 import sys
 import types
@@ -28,6 +29,8 @@ ADDON = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, ADDON)
 
 FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures')
+# Derives from the Addon stub below ('/tmp/fake_' + 'profile').
+HISTORY_PATH = '/tmp/fake_profile/search_history.json'
 
 
 def fixture(name):
@@ -40,6 +43,7 @@ NOTIFICATIONS = []
 KEYBOARD_RESULT = [None]
 EXECUTED = []
 SETTINGS = {}
+FILES = {}
 
 MENU = ['Search', 'Movies', 'Movies HD', 'TV Shows']
 
@@ -136,9 +140,24 @@ def _install_kodi_stubs():
     xbmcaddon = types.ModuleType('xbmcaddon')
     xbmcaddon.Addon = Addon
 
+    class _File:
+        def __init__(self, path, mode='r'):
+            self.path = path
+
+        def read(self):
+            return FILES.get(self.path, '')
+
+        def write(self, data):
+            FILES[self.path] = data
+
+        def close(self):
+            pass
+
     xbmcvfs = types.ModuleType('xbmcvfs')
     xbmcvfs.translatePath = lambda path: path
-    xbmcvfs.exists = lambda path: True
+    xbmcvfs.exists = lambda path: path in FILES
+    xbmcvfs.mkdirs = lambda path: None
+    xbmcvfs.File = _File
 
     sys.modules.update({'xbmc': xbmc, 'xbmcgui': xbmcgui,
                         'xbmcplugin': xbmcplugin, 'xbmcaddon': xbmcaddon,
@@ -164,6 +183,7 @@ class TestNavigation(unittest.TestCase):
         del NOTIFICATIONS[:]
         del EXECUTED[:]
         SETTINGS.clear()
+        FILES.clear()
         KEYBOARD_RESULT[0] = None
 
     def run_plugin(self, paramstring):
@@ -294,6 +314,74 @@ class TestNavigation(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertTrue(NOTIFICATIONS)
 
+    # -- search screen and history ---------------------------------------
+    def test_search_screen_lists_only_new_search_without_history(self):
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(
+                                    filmifen.URL_SEARCH))
+        self.assertEqual(self.labels(items), ['New search'])
+
+    def test_search_screen_lists_the_remembered_queries(self):
+        FILES[HISTORY_PATH] = json.dumps([{'text': 'кари'},
+                                          {'text': 'tenzing'}])
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(
+                                    filmifen.URL_SEARCH))
+        self.assertEqual(self.labels(items),
+                         ['New search', 'кари', 'tenzing', 'Clear history'])
+
+    def test_history_entry_replays_the_search(self):
+        FILES[HISTORY_PATH] = json.dumps([{'text': 'кари'}])
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(
+                                    filmifen.URL_SEARCH))
+        entry_query = [url.split('?', 1)[1] for label, _, url in items
+                       if label == 'кари'][0]
+        with patch('resources.lib.http.post',
+                   return_value=fixture('search_page1.html')) as post:
+            results = self.run_plugin(entry_query)
+        self.assertEqual(post.call_args[0][1]['story'], 'кари')
+        self.assertIn('Тензинг', self.labels(results))
+        self.assertIn('Кари (Се 1 • Еп 8)', self.labels(results))
+
+    def test_new_search_is_remembered(self):
+        KEYBOARD_RESULT[0] = 'кари'
+        with patch('resources.lib.http.post',
+                   return_value=fixture('search_page1.html')):
+            self.run_plugin('?mode=5')
+        self.assertEqual(json.loads(FILES[HISTORY_PATH]),
+                         [{'text': 'кари'}])
+
+    def test_cancelled_new_search_remembers_nothing(self):
+        KEYBOARD_RESULT[0] = None
+        items = self.run_plugin('?mode=5')
+        self.assertEqual(items, [])
+        self.assertNotIn(HISTORY_PATH, FILES)
+
+    def test_clear_history_empties_the_screen(self):
+        FILES[HISTORY_PATH] = json.dumps([{'text': 'кари'}])
+        self.run_plugin('?mode=6')
+        self.assertEqual(json.loads(FILES[HISTORY_PATH]), [])
+        self.assertIn('Container.Refresh', EXECUTED)
+        items = self.run_plugin('?url=%s&mode=2&name=Search'
+                                % urllib.parse.quote_plus(
+                                    filmifen.URL_SEARCH))
+        self.assertEqual(self.labels(items), ['New search'])
+
+    def test_history_keeps_newest_first_and_deduplicates(self):
+        kodi_utils.add_to_history('а')
+        kodi_utils.add_to_history('б')
+        kodi_utils.add_to_history('а')
+        self.assertEqual([item['text'] for item in kodi_utils.load_history()],
+                         ['а', 'б'])
+
+    def test_history_is_capped(self):
+        for index in range(kodi_utils.MAX_HISTORY + 5):
+            kodi_utils.add_to_history('q%d' % index)
+        history = kodi_utils.load_history()
+        self.assertEqual(len(history), kodi_utils.MAX_HISTORY)
+        self.assertEqual(history[0]['text'], 'q%d' % (kodi_utils.MAX_HISTORY + 4))
+
     # -- search ---------------------------------------------------------
     def test_search_posts_the_story_and_renders_both_card_types(self):
         posted = {}
@@ -305,9 +393,7 @@ class TestNavigation(unittest.TestCase):
 
         KEYBOARD_RESULT[0] = 'кари'
         with patch('resources.lib.http.post', side_effect=fake_post):
-            items = self.run_plugin('?url=%s&mode=2&name=Search'
-                                    % urllib.parse.quote_plus(
-                                        filmifen.URL_SEARCH))
+            items = self.run_plugin('?mode=5')
         self.assertEqual(posted['url'], filmifen.URL_SEARCH)
         self.assertEqual(posted['data'], {'do': 'search',
                                           'subaction': 'search',
@@ -315,6 +401,8 @@ class TestNavigation(unittest.TestCase):
         labels = self.labels(items)
         self.assertIn('Тензинг', labels)
         self.assertIn('Кари (Се 1 • Еп 8)', labels)
+        self.assertEqual(json.loads(FILES[HISTORY_PATH]),
+                         [{'text': 'кари'}])
 
         next_page = unquote_url([url for label, _, url in items
                                  if label == 'Next page >>'][0])
@@ -337,15 +425,13 @@ class TestNavigation(unittest.TestCase):
         KEYBOARD_RESULT[0] = 'нищо'
         with patch('resources.lib.http.post',
                    return_value='<html></html>'):
-            self.run_plugin('?url=%s&mode=2&name=Search'
-                            % urllib.parse.quote_plus(filmifen.URL_SEARCH))
+            self.run_plugin('?mode=5')
         self.assertTrue(any('No results' in str(args)
                             for args in NOTIFICATIONS))
 
     def test_cancelled_search_never_renders_the_menu(self):
         KEYBOARD_RESULT[0] = None
-        items = self.run_plugin('?url=%s&mode=2&name=Search'
-                                % urllib.parse.quote_plus(filmifen.URL_SEARCH))
+        items = self.run_plugin('?mode=5')
         self.assertEqual(items, [])
 
     # -- stream selection and play --------------------------------------

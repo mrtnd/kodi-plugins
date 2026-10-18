@@ -9,7 +9,7 @@ Current plugins:
 |---|---|---|---|
 | FMovies | `plugin.video.fmovies` | `1.2.6` | **DEPRECATED — unmaintained, no further releases.** Kept for reference/history only |
 | P2PBG+ | `plugin.video.p2pbgplus` | `0.9.0` | p2pbg.com torrent search + streaming via Elementum, VPN country gate, seeders-sorted HD-only listings |
-| FilmiFen+ | `plugin.video.filmifenplus` | `0.2.0` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com homepage mirrored at the root plus Movies, Movies HD and TV Shows with fixed listings, search and pagination |
+| FilmiFen+ | `plugin.video.filmifenplus` | `0.3.0` | Fork of `plugin.video.filmifen` 2026.05.05.01: filmifen.com homepage mirrored at the root plus Movies, Movies HD and TV Shows with fixed listings, search (with history) and pagination |
 
 > Works on Kodi 19 (Matrix), 20 (Nexus), 21 (Omega) — Android TV / Google TV / Fire OS / desktop.
 
@@ -327,7 +327,11 @@ to the reference, because that is the only version confirmed to play with
 - The **InfoWall** view is applied by default on every screen (Kodi view
   ids are skin-specific; 54 is Estuary's InfoWall, configurable in the
   add-on settings, or switchable off).
-- Search posts the site's own form (`do=search`/`subaction=search`/
+- Search opens the **search screen** first: **New search**, the last 20
+  remembered queries (most recent first), **Clear history**. Replaying a
+  query runs it at once; the history lives in the add-on profile
+  (`search_history.json`) on the device and is never uploaded anywhere.
+- New searches post the site's own form (`do=search`/`subaction=search`/
   `story=<query>`); results include movies and series, and paging works.
 - Series rows show the season/episode badge (`Кари (Се 1 • Еп 8)`) because
   the site titles every episode with the same name.
@@ -348,7 +352,7 @@ to the reference, because that is the only version confirmed to play with
 | `resources/lib/http.py` | requests session for filmifen.com (timeout added) |
 | `resources/lib/views.py` | Menu, listings, search, stream selection |
 | `resources/lib/playback.py` | resolveurl + subtitles + `setResolvedUrl` (reference logic) |
-| `resources/lib/kodi_utils.py` | Dialogs, keyboard, list items, directory plumbing |
+| `resources/lib/kodi_utils.py` | Dialogs, keyboard, list items, directory plumbing, search history |
 
 Run its tests with:
 
@@ -383,6 +387,7 @@ deep check, drop full captures into `tests/fixtures/` as
 | FilmiFen+ empty listing / `No items found` | The site layout likely changed — re-capture a page and compare with `resources/lib/filmifen.py` |
 | FilmiFen+ view/art looks wrong on a non-Estuary skin | The InfoWall id is skin-specific — change or disable "Force the InfoWall view" in the add-on settings |
 | FilmiFen+ root has no homepage content | The homepage fetch failed (site down); a notification is shown — the four menu entries still work |
+| FilmiFen+ remove remembered search queries | Open Search → **Clear history** (bottom of the screen) |
 | FilmiFen+ `No results for "…"` | The site search found nothing; check the spelling (the site's Bulgarian titles differ from English ones) |
 | No new Release after push | You didn't bump `addon.xml` version, or tag already exists — bump version and push again |
 | CI `addon.xml` validation fails | `id` or `version` attribute missing/malformed |

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.filmifenplus" name="FilmiFen+" version="0.2.0" provider-name="Community">
+<addon id="plugin.video.filmifenplus" name="FilmiFen+" version="0.3.0" provider-name="Community">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.findstreamurl" version="2023.07.11.01"/>
